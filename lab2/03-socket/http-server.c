@@ -130,7 +130,7 @@ void handle_https_request(SSL* ssl)
 			}else {
 				if (crlfCount) crlfCount = 0; 
 				// Range
-				char name[20];
+				char name[20] = {0};
 				strncpy(name,buf+i,13);
 				//printf("%s",name);
 				if (!strcmp("Range: bytes=", name)) {
