@@ -73,23 +73,17 @@ void * https_server() {
 
 void handle_https_request(SSL* ssl)
 {
-	printf("\nallbegin\n");
-	fflush(stdout);
 	char* response = (char*)malloc(70000);
 	if (SSL_accept(ssl) == -1){
 		perror("SSL_accept failed");
 		exit(1);
 	} else {
-		printf("\nbegin\n");
-		fflush(stdout);
 		char buf[1024] = {0};
 		int bytes = SSL_read(ssl, buf, sizeof(buf));
 		if (bytes < 0) {
 			perror("SSL_read failed");
 			exit(1);
 		}
-		printf("%s",buf);
-		fflush(stdout);
 		int i = 0,crlfCount = 0,j = 0;
 		char url[50]={0};
 		
@@ -101,19 +95,14 @@ void handle_https_request(SSL* ssl)
 		for (i = i+1; buf[i] != ' ';i++) {
 			url[j++] = buf[i]; 
 		}
-		printf("%s\n",url);
-		fflush(stdout);
-
 		//check url
 		FILE* fd;
 		if ( !(fd = fopen(url,"r")) ){
-			printf("in 404\n");
-			fflush(stdout);
 			const char* response = "HTTP/1.0 404 Not Found\r\n\r\nCNLab 2: Socket programming";
 			SSL_write(ssl,response, strlen(response));
 			int sock = SSL_get_fd(ssl);
-    			SSL_free(ssl);
-    			close(sock);
+    		SSL_free(ssl);
+    		close(sock);
 			return;
 		}	
 		//ignore version
@@ -125,23 +114,26 @@ void handle_https_request(SSL* ssl)
 			if (buf[i] == '\r' && buf[i+1] == '\n') {
 				i += 2;
 				crlfCount ++;
-				//printf("crlfCount = %d\n",crlfCount);
-				fflush(stdout);	
 			}else {
 				if (crlfCount) crlfCount = 0; 
+<<<<<<< HEAD:lab2/03-socket/03-socket/http-server.c
+				// chek Range
+=======
 				// Range
+>>>>>>> 3c4f7b194349c67a19bfe860dcca7031d599cce7:lab2/03-socket/http-server.c
 				char name[20] = {0};
 				strncpy(name,buf+i,13);
-				//printf("%s",name);
 				if (!strcmp("Range: bytes=", name)) {
 					from = 0;					
 					i = i + 13;
+					//from
 					while (buf[i] != '-') {
 						from *= 10;
 						from += buf[i] - '0';
 						i++;
 					}
 					i++; 
+					//to
 					if(buf[i] == '\r') to = -1;
 					else {
 						while(buf[i] != '\r') {
@@ -155,15 +147,9 @@ void handle_https_request(SSL* ssl)
 				}			
 			}	
 		}
-		printf("finish processing header\n");
-		fflush(stdout);	
 		//get file context
 		fseek(fd,0,SEEK_END);
 		long size = ftell(fd);
-		//printf("file size=%ld\n",size);
-		fflush(stdout);
-		printf("from = %d,to = %d\n",from, to);
-		fflush(stdout);		
 		if (from == -1) {
 			from = 0;
 			to = size-1;
@@ -254,8 +240,6 @@ void handle_http_request(int csock) {
 	strcat(response,url);
 
 	strcat(response,"\r\n\r\n");
-	printf("http to https:\n");	
-	printf("%s",response);
 	send(csock,response,strlen(response),0);
 	close(csock);
 }
