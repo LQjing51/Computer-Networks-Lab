@@ -9,7 +9,9 @@
 #include <resolv.h>
 #include "openssl/ssl.h"
 #include "openssl/err.h"
-void https_server() {
+void handle_https_request(SSL* ssl);
+void handle_http_request(int sock);
+void * https_server() {
 	// init SSL Library
 	SSL_library_init();
 	OpenSSL_add_all_algorithms();
@@ -71,20 +73,25 @@ void https_server() {
 
 void handle_https_request(SSL* ssl)
 {
-	char* final = (char*)malloc(70000);
-    if (SSL_accept(ssl) == -1){
+	printf("\nallbegin\n");
+	fflush(stdout);
+	char* response = (char*)malloc(70000);
+	if (SSL_accept(ssl) == -1){
 		perror("SSL_accept failed");
 		exit(1);
 	} else {
+		printf("\nbegin\n");
+		fflush(stdout);
 		char buf[1024] = {0};
-        int bytes = SSL_read(ssl, buf, sizeof(buf));
+		int bytes = SSL_read(ssl, buf, sizeof(buf));
 		if (bytes < 0) {
 			perror("SSL_read failed");
 			exit(1);
 		}
-
-		int i = 0;crlfCount = 0;j = 0;
-		char[50] url;
+		printf("%s",buf);
+		fflush(stdout);
+		int i = 0,crlfCount = 0,j = 0;
+		char url[50]={0};
 		
 		//ignore method
 		while (buf[i] != ' ') i++;
@@ -94,76 +101,95 @@ void handle_https_request(SSL* ssl)
 		for (i = i+1; buf[i] != ' ';i++) {
 			url[j++] = buf[i]; 
 		}
-		
+		printf("%s\n",url);
+		fflush(stdout);
+
 		//check url
 		FILE* fd;
 		if ( !(fd = fopen(url,"r")) ){
-			final = "HTTP/1.0 404 Not Found\r\n\r\nCNLab 2: Socket programming";
-			SSL_write(ssl,final, strlen(final));
+			printf("in 404\n");
+			fflush(stdout);
+			const char* response = "HTTP/1.0 404 Not Found\r\n\r\nCNLab 2: Socket programming";
+			SSL_write(ssl,response, strlen(response));
+			int sock = SSL_get_fd(ssl);
+    			SSL_free(ssl);
+    			close(sock);
 			return;
-		}
-		
+		}	
 		//ignore version
 		while(buf[i] != '\r' || buf[i+1] != '\n') i++;
 	
 		// headers
-		int from = -1; to = 0;
-		while (crlfCount != 2;) {
+		int from = -1, to = 0;
+		while (crlfCount != 2) {
 			if (buf[i] == '\r' && buf[i+1] == '\n') {
 				i += 2;
 				crlfCount ++;
+				//printf("crlfCount = %d\n",crlfCount);
+				fflush(stdout);	
 			}else {
 				if (crlfCount) crlfCount = 0; 
 				// Range
 				char name[20];
-				strcpy(name,buf+i,13);
+				strncpy(name,buf+i,13);
+				//printf("%s",name);
 				if (!strcmp("Range: bytes=", name)) {
+					from = 0;					
 					i = i + 13;
 					while (buf[i] != '-') {
 						from *= 10;
 						from += buf[i] - '0';
+						i++;
 					}
 					i++; 
 					if(buf[i] == '\r') to = -1;
 					else {
 						while(buf[i] != '\r') {
 							to *= 10;
-							to += buf[i] -'0';
+							to += buf[i]-'0';
+							i++;							
 						}
 					}  
-				}
-			
+				}else {
+					while(buf[i] != '\r' || buf[i+1] != '\n') i++;
+				}			
 			}	
 		}
-
+		printf("finish processing header\n");
+		fflush(stdout);	
 		//get file context
 		fseek(fd,0,SEEK_END);
 		long size = ftell(fd);
+		//printf("file size=%ld\n",size);
+		fflush(stdout);
+		printf("from = %d,to = %d\n",from, to);
+		fflush(stdout);		
 		if (from == -1) {
 			from = 0;
-			to = size;
-			const char* response = "HTTP/1.0 200 OK\r\n\r\n";
+			to = size-1;
+			strcpy(response,"HTTP/1.0 200 OK\r\n\r\n");
 		}else {
 			if (to == -1) to = size-1;
-			const char* response = "HTTP/1.0 206 Partial Content\r\n\r\n";
+			strcpy(response,"HTTP/1.0 206 Partial Content\r\n\r\n");
 		}
 		fseek(fd,from,SEEK_SET);
-		char* context = (char*)malloc(to-from+1);
+		char* context = (char*)malloc(to-from+2);
+		memset(context,0,to-from+2);
 		fread(context,1,to-from+1,fd);
 
 		// get final response
-		final = strcat(response,context);
-        SSL_write(ssl,final, strlen(final));
-    }
+		strcat(response,context);
+		SSL_write(ssl,response, strlen(response));
+    	}
 
     int sock = SSL_get_fd(ssl);
     SSL_free(ssl);
     close(sock);
 }
 
-void http_server(){
+void * http_server(){
 	
-	// init socket, listening to port 443
+	// init socket, listening to port 80
 	int sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock < 0) {
 		perror("Opening socket failed");
@@ -195,20 +221,39 @@ void http_server(){
 			perror("Accept failed");
 			exit(1);
 		}
-		handle_http_request(sock);
+		handle_http_request(csock);
 	}
 	close(sock);
 }
-void handle_http_request(int sock) {
+void handle_http_request(int csock) {
 	char buf[1024] = {0};
-	int bytes = recv(sock, buf, sizeof(buf));
+	int bytes = recv(csock, buf, sizeof(buf),0);
 	if (bytes < 0) {
 		perror("recv failed");
 		exit(1);
 	}
-	const char* final = "HTTP/1.0 301 Moved Permanently\r\nLocation: https://10.0.0.1/index.html\r\n\r\nCNLab 2: Socket programming"
-	send(sock,final,strlen(final));
-	close(sock);
+
+	char* response = (char*)malloc(10000);
+	strcpy(response,"HTTP/1.0 301 Moved Permanently\r\nLocation: https://10.0.0.1/");
+	
+	char* url = (char*)malloc(100);
+	memset(url,0,100);
+	int i = 0,j = 0;	
+	//ignore method
+	while (buf[i] != ' ') i++;
+		
+	//get url
+	i++;// '/'
+	for (i = i+1; buf[i] != ' ';i++) {
+		url[j++] = buf[i]; 
+	}
+	strcat(response,url);
+
+	strcat(response,"\r\n\r\n");
+	printf("http to https:\n");	
+	printf("%s",response);
+	send(csock,response,strlen(response),0);
+	close(csock);
 }
 
 int main()
@@ -217,12 +262,12 @@ int main()
 	int ret1,ret2;	
 	ret1 = pthread_create(&https,NULL,https_server,NULL);
 	if (ret1) {
-		printf("pthread create 1 error!")
+		printf("pthread create 1 error!");
 		return 0;
 	}
 	ret2 = pthread_create(&http,NULL,http_server,NULL);
 	if (ret2) {
-		printf("pthread create 2 error!")
+		printf("pthread create 2 error!");
 		return 0;
 	}
 	pthread_join(https,NULL);
