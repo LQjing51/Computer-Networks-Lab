@@ -173,12 +173,16 @@ void handle_https_request(SSL* ssl)
 			strcpy(response,"HTTP/1.0 206 Partial Content\r\n\r\n");
 		}
 		fseek(fd,from,SEEK_SET);
-		char* context = (char*)malloc(to-from+2);
-		memset(context,0,to-from+2);
+		char* context = (char*)malloc(to-from+1);
+		//memset(context,0,to-from+2);
 		fread(context,1,to-from+1,fd);
 
 		// get final response
 		strcat(response,context);
+		if (to-from < 110) printf("%s\n",context);
+		else printf("%s\n",context+size-100);
+		printf("end:%x\n",*(context+to-from));
+		printf("afterEnd:%x\n",*(context+to-from+1));
 		SSL_write(ssl,response, strlen(response));
     	}
 
