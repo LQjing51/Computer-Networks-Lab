@@ -116,7 +116,11 @@ void handle_https_request(SSL* ssl)
 				crlfCount ++;
 			}else {
 				if (crlfCount) crlfCount = 0; 
+<<<<<<< HEAD:lab2/03-socket/03-socket/http-server.c
 				// chek Range
+=======
+				// Range
+>>>>>>> 3c4f7b194349c67a19bfe860dcca7031d599cce7:lab2/03-socket/http-server.c
 				char name[20] = {0};
 				strncpy(name,buf+i,13);
 				if (!strcmp("Range: bytes=", name)) {

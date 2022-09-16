@@ -32,12 +32,12 @@ print("finish test 5")
 
 # http 206
 headers = { 'Range': 'bytes=100-200' }
-r = requests.get('http://10.0.0.1/index.html', headers=headers, verify=False)
+r = requests.get('http://10.0.0.1/index.html', headers=headers, verify=False, timeout=2)
 assert(r.status_code == 206 and open(test_dir + '/../index.html', 'rb').read()[100:201] == r.content)
 print("finish test 6")
 
 # http 206
 headers = { 'Range': 'bytes=100-' }
-r = requests.get('http://10.0.0.1/index.html', headers=headers, verify=False)
+r = requests.get('http://10.0.0.1/index.html', headers=headers, verify=False, timeout=2)
 assert(r.status_code == 206 and open(test_dir + '/../index.html', 'rb').read()[100:] == r.content)
 print("finish test 7")
