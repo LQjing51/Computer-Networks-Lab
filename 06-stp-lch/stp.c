@@ -171,7 +171,7 @@ static int cmp_port_config(stp_port_t *p, stp_port_t *rt) {
 // update all ports of stp
 static void stp_update_ports(stp_t *stp) {
 	for (int i = 0; i < stp->nports; i++) {
-		stp_port_t *p = ports + i;
+		stp_port_t *p = stp->ports + i;
 		if (stp_port_is_designated(p)) {
 			// update info
 			p->designated_root = stp->designated_root;
@@ -205,7 +205,7 @@ static void stp_handle_config_packet(stp_t *stp, stp_port_t *p,
 		if (!stp->root_port || !cmp_port_config(p, stp->root_port)) {
 			/* p will become root port */
 			// stop timer
-			if (!stp->root_port) stp_stop_timer(stp);
+			if (!stp->root_port) stp_stop_timer(&stp->hello_timer);
 			// update root_port
 			stp->root_port = p;
 			stp->designated_root = p->designated_root;
