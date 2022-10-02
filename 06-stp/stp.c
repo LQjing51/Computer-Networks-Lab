@@ -176,7 +176,7 @@ static void update_current_port_config(stp_port_t *p, struct stp_config *config)
 	p->designated_port = ntohs(config->port_id);
 }
 static void update_stp_config(stp_t *stp) {
-	stp_port_t *root_port = null;
+	stp_port_t *root_port = NULL;
 	for (int i = 0; i < stp->nports; i++) {
 		stp_port_t *p = &stp->ports[i];
 		if (!stp_port_is_designated(p)) {
@@ -185,7 +185,7 @@ static void update_stp_config(stp_t *stp) {
 		}
 	}
 	stp->root_port = root_port;
-	stp->designated_root = root_port->designated_root
+	stp->designated_root = root_port->designated_root;
 	stp->root_path_cost = root_port->designated_cost + root_port->path_cost;	
 }
 static void update_other_ports_config(stp_t *stp) {
@@ -214,8 +214,8 @@ static void stp_handle_config_packet(stp_t *stp, stp_port_t *p,
 		struct stp_config *config)
 {
 	// TODO: handle config packet here
-	fprintf(stdout, "TODO: handle config packet here.\n");
-	bool higher = packet_port_cmp(p,config)
+	//fprintf(stdout, "TODO: handle config packet here.\n");
+	bool higher = packet_port_cmp(p,config);
 	if (higher) {
 		update_current_port_config(p,config);
 		update_stp_config(stp);
