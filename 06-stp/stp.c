@@ -179,7 +179,7 @@ static void update_stp_config(stp_t *stp) {
 	stp_port_t *root_port = null;
 	for (int i = 0; i < stp->nports; i++) {
 		stp_port_t *p = &stp->ports[i];
-		if (stp_port_is_designated(p)) {
+		if (!stp_port_is_designated(p)) {
 			if (!root_port) root_port = p;
 			if (port_port_cmp(root_port,p)) root_port = p;
 		}
