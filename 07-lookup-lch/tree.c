@@ -8,7 +8,7 @@ int rt, num;
 Node    a[MAX_NODE * 32];
 int rt_ad, num_ad;
 // Node_ad b[MAX_NODE * 32];
-Node_ad_8 b[MAX_NODE * 4];
+Node_ad_8 b[MAX_NODE * 8];
 
 uint32_t str2ip(char *str) {
     int len = strlen(str);
@@ -90,22 +90,22 @@ int find_ad_2(int x, uint32_t val) {
 
 void ins_ad_8(int x, uint32_t val, int len, int port, int priority) {
     if (!len) {
-        if (~b[x].port || priority > b[x].priority) {
+        if (b[x].port == -1 || priority > b[x].priority) {
             b[x].port = port;
             b[x].priority = priority;
         }
         return;
     }
-    int nx = val & 255;
+    int nx = val & 15;
     if (!b[x].nxt[nx]) b[x].nxt[nx] = ++num_ad, b[num_ad].port = -1;
-    ins_ad(b[x].nxt[nx], val >> 8, len - 8, port);
+    ins_ad_8(b[x].nxt[nx], val >> 4, len - 4, port, priority);
 }
 int find_ad_8(int x, uint32_t val) {
 	int ans = -1;
 	while (x) {
 		if (~b[x].port) ans = b[x].port;
-		x = b[x].nxt[val & 255];
-		val >>= 8;
+		x = b[x].nxt[val & 15];
+		val >>= 4;
     }
 	return ans;
 }
@@ -156,11 +156,11 @@ void create_tree_advance(const char* forward_file){
         uint32_t ip = str2ip(str);
         fscanf(f, "%d%d", &length, &port);
         // ins_ad(rt_ad, ip, length, port);
-        int remain = length % 8;
-        int delta = !remain ? 0 : 8 - remain;
+        int remain = length % 4;
+        int delta = !remain ? 0 : 4 - remain;
         for (int i = 0; i < (1 << delta); i++) {
-            uint32_t new = (ip & ((1 << length) - 1)) | (i << length);
-            ins_ad_8(rt, length + delta, port, 8 - delta);
+            uint32_t new = (ip & ((1u << length) - 1)) | ((uint32_t) i << length);
+            ins_ad_8(rt, new, length + delta, port, 4 - delta);
         }
     }
 }

@@ -18,6 +18,12 @@ typedef struct {
     int port;
 } Node_ad;
 
+typedef struct {
+	int priority;
+	int nxt[16];
+	int port;
+} Node_ad_8;
+
 void create_tree(const char*);
 uint32_t *lookup_tree(uint32_t *);
 void create_tree_advance();
