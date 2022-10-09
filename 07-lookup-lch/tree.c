@@ -1,11 +1,13 @@
 #include "tree.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
 
-int rt;
-Node    a[MAX_NODE];
-int rt_ad;
-Node_ad b[MAX_NODE];
+int rt, num;
+Node    a[MAX_NODE * 32];
+int rt_ad, num_ad;
+Node_ad b[MAX_NODE * 32];
 
 uint32_t str2ip(char *str) {
     int len = strlen(str);
@@ -26,46 +28,53 @@ uint32_t str2ip(char *str) {
     return ret;
 }
 
-void ins(int &x, uint32_t val, int len, int port) {
-    if (!x) x = ++num, a[x].port = -1;
+void ins(int x, uint32_t val, int len, int port) {
     if (!len) {
         if (~a[x].port && a[x].port != port) {
-            fprintf(stderr, "ERROR: conflict entries.");
+            fprintf(stderr, "ERROR: conflict entries.", a[x].port, port);
             return;
         }
         a[x].port = port;
         return;
     }
-    ins(a[x].nxt[val & 1], val >>= 1, len - 1, port);
+    int nx = val & 1;
+    if (!a[x].nxt[nx]) a[x].nxt[nx] = ++num, a[num].port = -1;
+    ins(a[x].nxt[nx], val >> 1, len - 1, port);
 }
 
 int find(int x, uint32_t val) {
     if (!x) return -1;
-    int tmp = find(a[x].nxt[val & 1], val >>= 2);
+    int tmp = find(a[x].nxt[val & 1], val >> 1);
     if (~tmp) return tmp;
     return a[x].port;
 }
 
-void ins_ad(int &x, uint32_t val, int len, int port) {
-    if (!x) x = ++num, a[x].port = -1;
+void ins_ad(int x, uint32_t val, int len, int port) {
     if (len <= 0) {
-        if (~a[x].port) {
-            if (!len) a[x].port = port;
-        } else a[x].port = port;
+        if (~b[x].port) {
+            if (!len) b[x].port = port;
+        } else b[x].port = port;
         return;
     }
-    ins_ad(a[x].nxt[val & 3], val >>= 2, len - 2, port);
+    int nx = val & 3;
+    if (!b[x].nxt[nx]) b[x].nxt[nx] = ++num_ad, b[num_ad].port = -1;
+    ins_ad(b[x].nxt[nx], val >> 2, len - 2, port);
+    if (len == 1) {
+        nx ^= 2;
+        if (!b[x].nxt[nx]) b[x].nxt[nx] = ++num_ad, b[num_ad].port = -1;
+        ins_ad(b[x].nxt[nx], val >> 2, len - 2, port);
+    }
 }
 int find_ad(int x, uint32_t val) {
     if (!x) return -1;
-    int tmp = find(a[x].nxt[val & 3], val >>= 2);
+    int tmp = find_ad(b[x].nxt[val & 3], val >> 2);
     if (~tmp) return tmp;
-    return a[x].port;
+    return b[x].port;
 }
 
 // return an array of ip represented by an unsigned integer, size is TEST_SIZE
 uint32_t* read_test_data(const char* lookup_file){
-    uint32_t ip_vec = (uint32_t *) malloc(TEST_SIZE * sizeof(uint32_t));
+    uint32_t *ip_vec = (uint32_t *) malloc(TEST_SIZE * sizeof(uint32_t));
     char str[30];
     FILE *f = fopen(lookup_file, "r");
     if (!f) return NULL;
@@ -73,7 +82,7 @@ uint32_t* read_test_data(const char* lookup_file){
         fscanf(f, "%s", str);
         ip_vec[i] = str2ip(str);
     }
-    return NULL;
+    return ip_vec;
 }
 
 // Constructing an advanced trie-tree to lookup according to `forward_file`
@@ -82,16 +91,16 @@ void create_tree(const char* forward_file){
     int length, port;
     FILE *f = fopen(forward_file, "r");
     if (!f) return;
-    while (~fscanf(f, "%s", str)) {
+    rt = num = 1; a[rt].port = -1;
+    while (~fscanf(f, "%s%d%d", str, &length, &port)) {
         uint32_t ip = str2ip(str);
-        fscanf(f, "%d%d", &length, &port);
         ins(rt, ip, length, port);
     }
 }
 
 // Look up the ports of ip in file `lookup_file` using the basic tree
 uint32_t *lookup_tree(uint32_t* ip_vec){
-    uint32_t port_vec = (uint32_t *) malloc(TEST_SIZE * sizeof(uint32_t));
+    uint32_t *port_vec = (uint32_t *) malloc(TEST_SIZE * sizeof(uint32_t));
     for (int i = 0; i < TEST_SIZE; i++) {
         port_vec[i] = find(rt, ip_vec[i]);
     }
@@ -104,6 +113,7 @@ void create_tree_advance(const char* forward_file){
     int length, port;
     FILE *f = fopen(forward_file, "r");
     if (!f) return;
+    rt_ad = num_ad = 1; b[rt_ad].port = -1;
     while (~fscanf(f, "%s", str)) {
         uint32_t ip = str2ip(str);
         fscanf(f, "%d%d", &length, &port);
@@ -113,7 +123,7 @@ void create_tree_advance(const char* forward_file){
 
 // Look up the ports of ip in file `lookup_file` using the advanced tree
 uint32_t *lookup_tree_advance(uint32_t* ip_vec){
-    uint32_t port_vec = (uint32_t *) malloc(TEST_SIZE * sizeof(uint32_t));
+    uint32_t *port_vec = (uint32_t *) malloc(TEST_SIZE * sizeof(uint32_t));
     for (int i = 0; i < TEST_SIZE; i++) {
         port_vec[i] = find_ad(rt_ad, ip_vec[i]);
     }
