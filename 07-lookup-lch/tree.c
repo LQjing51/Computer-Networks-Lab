@@ -31,7 +31,7 @@ uint32_t str2ip(char *str) {
 void ins(int x, uint32_t val, int len, int port) {
     if (!len) {
         if (~a[x].port && a[x].port != port) {
-            fprintf(stderr, "ERROR: conflict entries.", a[x].port, port);
+            fprintf(stderr, "ERROR: conflict entries.");
             return;
         }
         a[x].port = port;
@@ -70,6 +70,15 @@ int find_ad(int x, uint32_t val) {
     int tmp = find_ad(b[x].nxt[val & 3], val >> 2);
     if (~tmp) return tmp;
     return b[x].port;
+}
+int find_ad_2(int x, uint32_t val) {
+	int ans = -1;
+	while (x) {
+		if (~b[x].port) ans = b[x].port;
+		x = b[x].nxt[val & 3];
+		val >>= 2;
+    }
+	return ans;
 }
 
 // return an array of ip represented by an unsigned integer, size is TEST_SIZE
@@ -125,7 +134,7 @@ void create_tree_advance(const char* forward_file){
 uint32_t *lookup_tree_advance(uint32_t* ip_vec){
     uint32_t *port_vec = (uint32_t *) malloc(TEST_SIZE * sizeof(uint32_t));
     for (int i = 0; i < TEST_SIZE; i++) {
-        port_vec[i] = find_ad(rt_ad, ip_vec[i]);
+        port_vec[i] = find_ad_2(rt_ad, ip_vec[i]);
     }
     return port_vec;
 }

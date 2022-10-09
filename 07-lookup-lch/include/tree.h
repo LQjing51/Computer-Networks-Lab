@@ -14,8 +14,8 @@ typedef struct {
 } Node;
 
 typedef struct {
-    int port;
     int nxt[4];
+    int port;
 } Node_ad;
 
 void create_tree(const char*);
