@@ -14,15 +14,20 @@ typedef struct {
 } Node;
 
 typedef struct {
-    int nxt[4];
     int port;
+    int nxt[4];
 } Node_ad;
 
 typedef struct {
-	int priority;
-	int nxt[16];
-	int port;
-} Node_ad_8;
+    int port;
+    int len[4], val[4];   //path compression
+    int nxt[4];
+} Node_ad_2;
+
+typedef struct {
+    int x;
+    int len, val;
+} Tri;
 
 void create_tree(const char*);
 uint32_t *lookup_tree(uint32_t *);

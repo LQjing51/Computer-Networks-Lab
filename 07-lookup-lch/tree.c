@@ -5,10 +5,9 @@
 #include <ctype.h>
 
 int rt, num;
-Node    a[MAX_NODE * 32];
+Node      a[MAX_NODE * 32];
 int rt_ad, num_ad;
-// Node_ad b[MAX_NODE * 32];
-Node_ad_8 b[MAX_NODE * 8];
+Node_ad_2 b[MAX_NODE * 16];
 
 uint32_t str2ip(char *str) {
     int len = strlen(str);
@@ -52,7 +51,7 @@ int find(int x, uint32_t val) {
     return a[x].port;
 }
 
-////////////////////////////////
+/***** ADVACE *****/
 
 void ins_ad(int x, uint32_t val, int len, int port) {
     if (len <= 0) {
@@ -76,7 +75,7 @@ int find_ad(int x, uint32_t val) {
     if (~tmp) return tmp;
     return b[x].port;
 }
-int find_ad_2(int x, uint32_t val) {
+int find_ad_no_rc(int x, uint32_t val) {
 	int ans = -1;
 	while (x) {
 		if (~b[x].port) ans = b[x].port;
@@ -86,28 +85,66 @@ int find_ad_2(int x, uint32_t val) {
 	return ans;
 }
 
-////////////////////////////////
+/***** Compression *****/
 
-void ins_ad_8(int x, uint32_t val, int len, int port, int priority) {
-    if (!len) {
-        if (b[x].port == -1 || priority > b[x].priority) {
-            b[x].port = port;
-            b[x].priority = priority;
-        }
+void ins_ad_2(int x, uint32_t val, int len, int port) {
+    if (len <= 0) {
+        if (~b[x].port) {
+            if (!len) b[x].port = port;
+        } else b[x].port = port;
         return;
     }
-    int nx = val & 15;
-    if (!b[x].nxt[nx]) b[x].nxt[nx] = ++num_ad, b[num_ad].port = -1;
-    ins_ad_8(b[x].nxt[nx], val >> 4, len - 4, port, priority);
-}
-int find_ad_8(int x, uint32_t val) {
-	int ans = -1;
-	while (x) {
-		if (~b[x].port) ans = b[x].port;
-		x = b[x].nxt[val & 15];
-		val >>= 4;
+    int nx = val & 3;
+    if (!b[x].nxt[nx]) b[x].nxt[nx] = ++num_ad, b[x].val[nx] = nx, b[x].len[nx] = 2, b[num_ad].port = -1;
+    ins_ad_2(b[x].nxt[nx], val >> 2, len - 2, port);
+    if (len == 1) {
+        nx ^= 2;
+        if (!b[x].nxt[nx]) b[x].nxt[nx] = ++num_ad, b[x].val[nx] = nx, b[x].len[nx] = 2, b[num_ad].port = -1;
+        ins_ad_2(b[x].nxt[nx], val >> 2, len - 2, port);
     }
-	return ans;
+}
+Tri do_compression(int x) {
+    Tri res[4];
+    int count = 0, lst = 0;
+    for (int nx = 0; nx < 4; nx++) {
+        if (b[x].nxt[nx]) {
+            res[nx] = do_compression(b[x].nxt[nx]);
+            lst = nx;
+            count++;
+        }
+    }
+    Tri tmp;
+    tmp.x = x; tmp.val = 0; tmp.len = 2;
+    switch (count) {
+        case (0):
+            break;
+        case (1):
+            if (b[x].port == -1 && res[lst].x) {
+                // merge
+                tmp.x = res[lst].x; tmp.val = (res[lst].val << 2) + lst; tmp.len = res[len] + 2;
+            }
+            break;
+        default:
+            // handle compression
+            for (int nx = 0; nx < 4; nx++) {
+                if (b[x].nxt[nx] && res[nx].x && res[nx].len > 2) {
+                    // do compression
+                    b[x].nxt[nx] = res[nx].x;
+                    b[x].val[nx] = (res[nx].val << 2) + nx;
+                    b[x].len[nx] = res[nx].len;
+                }
+            }
+    }
+    return tmp;
+}
+
+int find_ad_2(int x, uint32_t val) {
+    uint32_t nx = val & 3;
+    if (b[x].nxt[nx] && !(b[x].val[nx] ^ (val & ((1 << b[x].len[nx]) - 1)))) {
+        int tmp = find_ad_2(b[x].nxt[nx], val >> b[x].len[nx]);
+        if (~tmp) return tmp;
+    }
+    return b[x].port;
 }
 
 // return an array of ip represented by an unsigned integer, size is TEST_SIZE
@@ -156,20 +193,21 @@ void create_tree_advance(const char* forward_file){
         uint32_t ip = str2ip(str);
         fscanf(f, "%d%d", &length, &port);
         // ins_ad(rt_ad, ip, length, port);
-        int remain = length % 4;
-        int delta = !remain ? 0 : 4 - remain;
+        int remain = length % 8;
+        int delta = !remain ? 0 : 8 - remain;
         for (int i = 0; i < (1 << delta); i++) {
-            uint32_t new = (ip & ((1u << length) - 1)) | ((uint32_t) i << length);
-            ins_ad_8(rt, new, length + delta, port, 4 - delta);
+            uint32_t new = (ip & ((1 << length) - 1)) | (i << length);
+            ins_ad_2(rt, length + delta, port, 8 - delta);
         }
     }
+    do_compress(rt);
 }
 
 // Look up the ports of ip in file `lookup_file` using the advanced tree
 uint32_t *lookup_tree_advance(uint32_t* ip_vec){
     uint32_t *port_vec = (uint32_t *) malloc(TEST_SIZE * sizeof(uint32_t));
     for (int i = 0; i < TEST_SIZE; i++) {
-        port_vec[i] = find_ad_8(rt_ad, ip_vec[i]);
+        port_vec[i] = find_ad_2(rt_ad, ip_vec[i]);
     }
     return port_vec;
 }
