@@ -1,11 +1,12 @@
 #include "tree.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 typedef struct tree
 {
     int port;
-    TreeNode* right;
-    TreeNode* left;
+    struct tree* right;
+    struct tree* left;
 }TreeNode;
 TreeNode* root;
 // return an array of ip represented by an unsigned integer, size is TEST_SIZE
@@ -45,11 +46,11 @@ uint32_t* read_test_data(const char* lookup_file){
 void addToTree(uint32_t ip, int mask, int port) {
     TreeNode* currentNode = root;
     while(mask) {
-        if ((ip & (1<<31)) && currentNode->right){
+        if ((ip & (1u<<31)) && currentNode->right){
             currentNode = currentNode->right;
-        }else if (!(ip & (1<<31)) && currentNode->left){
+        }else if (!(ip & (1u<<31)) && currentNode->left){
             currentNode = currentNode->left;
-        }else if (ip & (1<<31)) {
+        }else if (ip & (1u<<31)) {
             TreeNode* newNode = malloc(sizeof(TreeNode));
             newNode->port = -1;
             newNode->right = NULL;
@@ -72,7 +73,7 @@ void addToTree(uint32_t ip, int mask, int port) {
 // Constructing an advanced trie-tree to lookup according to `forward_file`
 void create_tree(const char* forward_file){
     FILE* fp = fopen(forward_file,"r");
-    char* ipLine = malloc(25);
+    char* ipLine = malloc(16);
     if(NULL == fp){
         perror("Open forward file fails");
         exit(1);
@@ -83,7 +84,11 @@ void create_tree(const char* forward_file){
     int ret = fscanf(fp,"%s%d%d",ipLine,&mask,&port);
     uint8_t tmp = 0;
     root = malloc(sizeof(TreeNode));
+    root->right = NULL;
+    root->left = NULL;
+    root->port = -1;
     while(ret != -1){
+	ip = 0;
         int len = strlen(ipLine);
         for (int j = 0; j < len; j++) {
             if (ipLine[j] == '.') {
@@ -97,6 +102,7 @@ void create_tree(const char* forward_file){
             if (j == len-1) {
                 ip = ip << 8;
                 ip += tmp;
+		tmp = 0;
             }
         }
         addToTree(ip,mask,port);
@@ -107,26 +113,23 @@ void create_tree(const char* forward_file){
 uint32_t lookUp(uint32_t ip) {
     TreeNode* currentNode = root;
     uint32_t lastMatch = -1;
-    int count = 0;
-    while(count != 32) {
+    while(1) {
         if (currentNode->port != -1) {
             lastMatch = currentNode->port; 
         }
-        if ((ip & (1<<31)) && currentNode->right){
+        if ((ip & (1u<<31)) && currentNode->right){
             currentNode = currentNode->right;
-        }else if (!(ip & (1<<31)) && currentNode->left){
+        }else if (!(ip & (1u<<31)) && currentNode->left){
             currentNode = currentNode->left;
         }else{
             return lastMatch;
         }
         ip = ip << 1;
-        count++;
     }
     return lastMatch;
 }
 // Look up the ports of ip in file `lookup_file` using the basic tree
 uint32_t *lookup_tree(uint32_t* ip_vec){
-    fprintf(stderr,"TODO: %s\n",__func__);
     uint32_t* res = malloc(sizeof(uint32_t)*TEST_SIZE);
     uint32_t ip;
     for(int i = 0;i < TEST_SIZE;i++){
@@ -139,13 +142,13 @@ uint32_t *lookup_tree(uint32_t* ip_vec){
 
 // Constructing an advanced trie-tree to lookup according to `forwardingtable_filename`
 void create_tree_advance(const char* forward_file){
-    fprintf(stderr,"TODO: %s\n",__func__);
+
 }
 
 // Look up the ports of ip in file `lookup_file` using the advanced tree
 uint32_t *lookup_tree_advance(uint32_t* ip_vec){
-    fprintf(stderr,"TODO: %s\n",__func__);
-	return NULL;
+    uint32_t* res = malloc(sizeof(uint32_t)*TEST_SIZE);
+    return res;
 }
 
 
