@@ -2,6 +2,11 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <icmp.h>
+#include <rtable.h>
+#include <string.h>
+#include <arp.h>
+#include <arpcache.h>
 
 // handle ip packet
 //
@@ -13,10 +18,13 @@ void handle_ip_packet(iface_info_t *iface, char *packet, int len)
 	struct ether_header *eh = (struct ether_header *) packet;
 	struct iphdr *iph = packet_to_ip_hdr(packet);
 
+	printf("handle_ip_packet: type = %d\n", (int) iph->protocol);
+
 	/* check if the packet is ICMP echo request */
-	if (ih->protocol == IPPROTO_ICMP) {
+	if (iph->protocol == IPPROTO_ICMP) {
 		struct icmphdr *ich = (struct icmphdr *) IP_DATA(iph);
 		if (ich->type == ICMP_ECHOREQUEST && ntohl(iph->daddr) == iface->ip) {
+			printf("handle_ip_packet: send ICMP echo reply\n");
 			// change packet to ICMP echo reply
 			ich->type = 0;
 			ich->code = 0;
@@ -37,6 +45,7 @@ void handle_ip_packet(iface_info_t *iface, char *packet, int len)
 	rt_entry_t *entry = longest_prefix_match(ntohl(iph->daddr));
 	if (!entry) {
 		// reply ICMP_DEST_UNREACH
+		printf("handle_ip_packet: send ICMP_DEST_UNREACH\n");
 		send_icmp_packet(packet, iface, ICMP_DEST_UNREACH, 0);
 		return;
 	}
@@ -44,12 +53,15 @@ void handle_ip_packet(iface_info_t *iface, char *packet, int len)
 	/* substract 1 from ttl */
 	if (!(--iph->ttl)) {
 		// reply ICMP_TIME_EXCEEDED
+		printf("handle_ip_packet: send ICMP_TIME_EXCEEDED\n");
 		send_icmp_packet(packet, iface, ICMP_TIME_EXCEEDED, 0);
 		return;
 	}
+	iph->checksum = ip_checksum(iph);
 
 	/* forward packet */
 	u32 dest_ip_addr = entry->gw ? entry->gw : ntohl(iph->daddr);
+	printf("handle_ip_packet: forward, dest_ip = %x\n", dest_ip_addr);
 	iface_send_packet_by_arp(entry->iface, dest_ip_addr, packet, len);
 }
 
@@ -73,12 +85,12 @@ void send_icmp_packet(char *packet, iface_info_t *iface, u8 type, u8 code) {
 	free(buffer);
 
 	// fill ip header
-	struct icmphdr *new_iph = packet_to_ip_hdr(new_packet)
+	struct iphdr *new_iph = packet_to_ip_hdr(new_packet);
 	u16 ip_total_len = IP_BASE_HDR_SIZE + ICMP_HDR_SIZE + icmp_data_len;
 	ip_init_hdr(new_iph, iface->ip, ntohl(iph->saddr), ip_total_len, IPPROTO_ICMP);
 
 	// fill eth header
-	struct icmphdr *new_eh = (struct ether_header *) new_packet;
+	struct ether_header *new_eh = (struct ether_header *) new_packet;
 	new_eh->ether_type = htons(ETH_P_IP);
 	memcpy(new_eh->ether_dhost, eh->ether_shost, ETH_ALEN);
 	memcpy(new_eh->ether_shost, iface->mac, ETH_ALEN);
