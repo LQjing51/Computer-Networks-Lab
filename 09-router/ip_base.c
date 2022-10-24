@@ -34,9 +34,9 @@ rt_entry_t *longest_prefix_match(u32 dst)
 	rt_entry_t *longest = NULL;
 	u32 long_mask = 0;
 	list_for_each_entry(entry, &rtable, list) {
-		if (dst & entry->mask == entry->dest & entry->mask) {
-			if (mask > long_mask) {
-				long_mask = mask;
+		if ((dst & entry->mask) == (entry->dest & entry->mask)) {
+			if (entry->mask > long_mask) {
+				long_mask = entry->mask;
 				longest = entry;
 			}
 		}

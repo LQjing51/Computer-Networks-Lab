@@ -1,8 +1,10 @@
 #include "ip.h"
-
+#include "icmp.h"
+#include "arp.h"
+#include "rtable.h"
 #include <stdio.h>
 #include <stdlib.h>
-
+#include <string.h>
 // handle ip packet
 //
 // If the packet is ICMP echo request and the destination IP address is equal to
@@ -15,8 +17,10 @@ void handle_ip_packet(iface_info_t *iface, char *packet, int len)
 	struct iphdr *iph = (struct iphdr *)(packet+ETHER_HDR_SIZE);
 	struct icmphdr *icmph = (struct icmphdr *)IP_DATA(iph);
 	if (icmph->type == ICMP_ECHOREQUEST && ntohl(iph->daddr) == iface->ip) {
+		printf("ip packet: icmp type == icmp echo request\n"); 
 		icmp_send_packet(packet, len, ICMP_ECHOREPLY, 0);
 	}else {
+		printf("ip packet: need forward\n"); 
 		//ip_send_packet(packet, len);
 		//iface_send_packet_by_arp(iface, iph->daddr, packet,len);
 		if (--(iph->ttl) <= 0) {
@@ -33,7 +37,7 @@ void handle_ip_packet(iface_info_t *iface, char *packet, int len)
 		u32 dst_ip;
 		if (!res->gw) dst_ip = ntohl(iph->daddr);
 		else dst_ip = res->gw;
-		iface_send_packet_by_arp(iface, dst_ip, packet, len)
+		iface_send_packet_by_arp(res->iface, dst_ip, packet, len);
 		
 	}
 
