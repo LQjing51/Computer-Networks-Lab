@@ -52,7 +52,7 @@ void arpcache_destroy()
 // and mac address with the given arguments
 int arpcache_lookup(u32 ip4, u8 mac[ETH_ALEN])
 {
-	fprintf(stderr, "TODO: lookup ip address in arp cache.\n");
+	//fprintf(stderr, "TODO: lookup ip address in arp cache.\n");
 
 	pthread_mutex_lock(&arpcache.lock);
 
@@ -77,7 +77,7 @@ int arpcache_lookup(u32 ip4, u8 mac[ETH_ALEN])
 // with the given IP address and iface, append the packet, and send arp request.
 void arpcache_append_packet(iface_info_t *iface, u32 ip4, char *packet, int len)
 {
-	fprintf(stderr, "TODO: append the ip address if lookup failed, and send arp request if necessary.\n");
+	//fprintf(stderr, "TODO: append the ip address if lookup failed, and send arp request if necessary.\n");
 	pthread_mutex_lock(&arpcache.lock);
 
 	struct arp_req *req_entry = NULL;
@@ -115,7 +115,7 @@ void arpcache_append_packet(iface_info_t *iface, u32 ip4, char *packet, int len)
 // them out
 void arpcache_insert(u32 ip4, u8 mac[ETH_ALEN])
 {
-	fprintf(stderr, "TODO: insert ip->mac entry, and send all the pending packets.\n");
+	//fprintf(stderr, "TODO: insert ip->mac entry, and send all the pending packets.\n");
 	pthread_mutex_lock(&arpcache.lock);
 
 	int i;
@@ -177,11 +177,11 @@ void *arpcache_sweep(void *arg)
 		list_for_each_entry_safe(req_entry, req_q, &(arpcache.req_list), list) {
 			if (now - req_entry->sent >= 1){
 				if (req_entry->retries < 5) { 
-					printf("resend request\n");
+					//printf("resend request\n");
 					arp_send_request(req_entry->iface, req_entry->ip4);
 					req_entry->retries++;
 				}else {
-					printf("already 5 times send request\n");
+					//printf("already 5 times send request\n");
 					struct cached_pkt *pkt_entry = NULL, *pkt_q;
 					list_for_each_entry_safe(pkt_entry, pkt_q, &(req_entry->cached_packets), list) {
 						icmp_send_packet(pkt_entry->packet, pkt_entry->len, ICMP_DEST_UNREACH, ICMP_HOST_UNREACH);
