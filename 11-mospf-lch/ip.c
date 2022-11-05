@@ -64,7 +64,7 @@ void handle_ip_packet(iface_info_t *iface, char *packet, int len)
 	rt_entry_t *entry = longest_prefix_match(ntohl(iph->daddr));
 	if (!entry) {
 		// reply ICMP_DEST_UNREACH
-		printf("handle_ip_packet: send ICMP_DEST_UNREACH\n");
+		// printf("handle_ip_packet: send ICMP_DEST_UNREACH\n");
 		send_icmp_packet(packet, iface, ICMP_DEST_UNREACH, 0);
 		return;
 	}
@@ -72,7 +72,7 @@ void handle_ip_packet(iface_info_t *iface, char *packet, int len)
 	/* substract 1 from ttl */
 	if (!(--iph->ttl)) {
 		// reply ICMP_TIME_EXCEEDED
-		printf("handle_ip_packet: send ICMP_TIME_EXCEEDED\n");
+		// printf("handle_ip_packet: send ICMP_TIME_EXCEEDED\n");
 		send_icmp_packet(packet, iface, ICMP_TIME_EXCEEDED, 0);
 		return;
 	}
@@ -80,7 +80,7 @@ void handle_ip_packet(iface_info_t *iface, char *packet, int len)
 
 	/* forward packet */
 	u32 dest_ip_addr = entry->gw ? entry->gw : ntohl(iph->daddr);
-	printf("handle_ip_packet: forward, dest_ip = %x\n", dest_ip_addr);
+	// printf("handle_ip_packet: forward, dest_ip = %x\n", dest_ip_addr);
 	iface_send_packet_by_arp(entry->iface, dest_ip_addr, packet, len);
 }
 

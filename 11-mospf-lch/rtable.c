@@ -24,6 +24,8 @@ rt_entry_t *new_rt_entry(u32 dest, u32 mask, u32 gw, iface_info_t *iface)
 	entry->iface = iface;
 	strcpy(entry->if_name, iface->name);
 
+	// printf("dest = %hhu.%hhu.%hhu.%hhu, mask = %x, gw = %hhu.%hhu.%hhu.%hhu\n", LE_IP_FMT_STR(dest), mask, LE_IP_FMT_STR(gw));
+
 	return entry;
 }
 

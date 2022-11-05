@@ -62,11 +62,6 @@ void mospf_run()
 	pthread_create(&lsu, NULL, sending_mospf_lsu_thread, NULL);
 	pthread_create(&nbr, NULL, checking_nbr_thread, NULL);
 	pthread_create(&db, NULL, checking_database_thread, NULL);
-
-	while (1) {
-		sleep(1);
-		dump_database();
-	}
 }
 
 void *sending_mospf_hello_thread(void *param)
@@ -93,7 +88,7 @@ void *sending_mospf_hello_thread(void *param)
 				memcpy(eh->ether_shost, iface->mac, ETH_ALEN);
 				memcpy(eh->ether_dhost, allSPFRouteMac, ETH_ALEN);
 
-				printf("send hello packet on %s\n", iface->name);
+				// printf("send hello packet on %s\n", iface->name);
 
 				iface_send_packet(iface, packet, ETHER_HDR_SIZE + IP_BASE_HDR_SIZE + MOSPF_HDR_SIZE + MOSPF_HELLO_SIZE);
 
@@ -136,6 +131,7 @@ void *checking_nbr_thread(void *param)
 
 void *checking_database_thread(void *param)
 {
+	int counter = 0;
 	while (1) {
 		sleep(1);
 		
@@ -149,6 +145,8 @@ void *checking_database_thread(void *param)
 				flag = 1;
 			}
 		}
+
+		if (++counter == 5) dump_database(), counter = 0;
 
 		if (flag) update_rtable();
 
@@ -165,8 +163,9 @@ void handle_mospf_hello(iface_info_t *iface, const char *packet, int len)
 	struct mospf_hdr *mospf = (struct mospf_hdr *) IP_DATA(ip);
 	struct mospf_hello *hello = (struct mospf_hello *) (IP_DATA(ip) + MOSPF_HDR_SIZE);
 
-	printf("recved mospf_hello from iface %s, rid = %d\n", iface->name, (int) ntohl(mospf->rid));
+	// printf("recved mospf_hello from iface %s, rid = %d\n", iface->name, (int) ntohl(mospf->rid));
 
+	dump_database();
 
 	u32 nbr_id = ntohl(mospf->rid);
 	mospf_nbr_t *nbr = NULL;
@@ -175,6 +174,9 @@ void handle_mospf_hello(iface_info_t *iface, const char *packet, int len)
 			// update alive time
 			nbr->alive = ntohs(hello->helloint) * 3;
 			pthread_mutex_unlock(&mospf_lock);
+
+			// printf("Update alive time\n");
+
 			return;
 		}
 	}
@@ -191,6 +193,8 @@ void handle_mospf_hello(iface_info_t *iface, const char *packet, int len)
 	// send LSU packet for all iface
 	char *mospf_msg = generate_lsu_packet();
 	send_lsu_packet(mospf_msg, NULL);
+
+	dump_database();
 
 	pthread_mutex_unlock(&mospf_lock);
 }
@@ -222,9 +226,14 @@ void handle_mospf_lsu(iface_info_t *iface, char *packet, int len)
 	struct mospf_hdr *mospf = (struct mospf_hdr *) IP_DATA(ip);
 	struct mospf_lsu *lsu = (struct mospf_lsu *) (IP_DATA(ip) + MOSPF_HDR_SIZE);
 
-	printf("recved mospf_lsu from iface %s, rid = %d\n", iface->name, (int) ntohl(mospf->rid));
+	// printf("recved mospf_lsu from iface %s, rid = %d\n", iface->name, (int) ntohl(mospf->rid));
 
 	u32 rid = ntohl(mospf->rid);
+
+	if (rid == instance->router_id) {
+		pthread_mutex_unlock(&mospf_lock);
+		return;
+	}
 
 	mospf_db_entry_t *entry;
 	list_for_each_entry(entry, &mospf_db, list) {
@@ -252,6 +261,8 @@ FORWARD:
 	update_rtable();
 
 	pthread_mutex_unlock(&mospf_lock);
+
+	// printf("exit handle_mospf_lsu\n");
 }
 
 /* Generate LSU packet for this router.
@@ -304,6 +315,8 @@ void send_lsu_packet(char *mospf_msg, iface_info_t *iface_nosend) {
 	iface_info_t *iface;
 	mospf_nbr_t *nbr;
 
+	// printf("Send lsu packet, rid = %d\n", (int) ntohl(mospf->rid));
+
 	list_for_each_entry(iface, &instance->iface_list, list) {
 		if (iface == iface_nosend) continue;
 		list_for_each_entry(nbr, &iface->nbr_list, list) {
@@ -314,8 +327,6 @@ void send_lsu_packet(char *mospf_msg, iface_info_t *iface_nosend) {
 			// fill ip header
 			struct iphdr *ip = (struct iphdr *) (packet + ETHER_HDR_SIZE);
 			ip_init_hdr(ip, iface->ip, nbr->nbr_ip, IP_BASE_HDR_SIZE + mospf_len, IPPROTO_MOSPF);
-
-			printf("send lsu packet on %s\n", iface->name);
 
 			// send packet
 			iface_send_packet_by_arp(iface, nbr->nbr_ip, packet, ETHER_HDR_SIZE + IP_BASE_HDR_SIZE + mospf_len);
@@ -347,13 +358,15 @@ int dist[V], prev[V];
 int sel[V];
 
 void add_edge_raw(int x, u32 y) {
-	to[++num] = y; nx[num] = h[x]; h[x] = num;
+	to_rid[++num] = y; nx[num] = h[x]; h[x] = num;
 }
 
 /* Update rtable entries.
    Assume that you have acquired mospf_lock. */
 void update_rtable() {
 	// TODO: We should acquire rtable lock here
+
+	// printf("Update Rtable\n");
 
 	int i, j, k;
 	iface_info_t *iface;
@@ -369,11 +382,17 @@ void update_rtable() {
 	}
 
 	// construct graph
-	rids[n = 1] = instance->router_id;
+	rids[n = 1] = instance->router_id; h[1] = 0;
+	list_for_each_entry(iface, &instance->iface_list, list) {
+		list_for_each_entry(nbr, &iface->nbr_list, list) {
+			add_edge_raw(1, nbr->nbr_id);
+		}
+	}
+
 	num = 0;
-	mospf_db_entry_t *entry, *entry_;
-	list_for_each_entry_safe(entry, entry_, &mospf_db, list) {
-		rids[++n] = entry->rid;
+	mospf_db_entry_t *entry;
+	list_for_each_entry(entry, &mospf_db, list) {
+		rids[++n] = entry->rid; h[n] = 0;
 		for (i = 0; i < entry->nadv; i++) {
 			if (entry->array[i].rid)
 				add_edge_raw(n, ntohl(entry->array[i].rid));
@@ -387,8 +406,8 @@ void update_rtable() {
 					break;
 				}
 			if (k > n) {
-				printf("Update Rtable Error: in construct graph\n");
-				return;
+				to[j] = 0;
+				printf("%d: Update Rtable Error: node %d not in database\n", (int) instance->router_id, (int) to_rid[j]);
 			}
 		}
 
@@ -404,13 +423,13 @@ void update_rtable() {
 		if (!u) break;	// cannot select node
 		sel[u] = 1;
 		// do relaxing
-		for (j = h[i]; j; j = nx[j])
-			if (dist[to[j]] > dist[u] + 1)
+		for (j = h[u]; j; j = nx[j])
+			if (to[j] && dist[to[j]] > dist[u] + 1)
 				dist[to[j]] = dist[u] + 1, prev[to[j]] = u;
 	}
 
 	// add new entries
-	for (int i = 2; i <= n; i++)
+	for (i = 2; i <= n; i++)
 		if (dist[i] < n + 1) {
 			// get next node
 			int lst, cur = i;
@@ -437,8 +456,9 @@ void update_rtable() {
 			// create rt entry
 			list_for_each_entry(entry, &mospf_db, list) {
 				if (entry->rid == rids[i]) {
-					for (i = 0; i < entry->nadv; i++) {
-						struct mospf_lsa *lsa = &entry->array[i];
+					// printf("insert entry for %d\n", (int) entry->rid);
+					for (j = 0; j < entry->nadv; j++) {
+						struct mospf_lsa *lsa = &entry->array[j];
 						rt_entry_t *new_entry = new_rt_entry(ntohl(lsa->network), ntohl(lsa->mask), rt_gw, rt_iface);
 						add_rt_entry(new_entry);
 					}
@@ -448,14 +468,16 @@ void update_rtable() {
 }
 
 void dump_database() {
-	pthread_mutex_lock(&mospf_lock);
 	printf("Dump Database for rid = %d\n", (int) instance->router_id);
 	mospf_db_entry_t *entry;
 	list_for_each_entry(entry, &mospf_db, list) {
-		printf("%d: %d\n", (int) entry->rid, entry->nadv);
+		printf("    Rid %d: has %d neighbors\n", (int) entry->rid, entry->nadv);
+		int i;
+		for (i = 0; i < entry->nadv; i++) {
+			u32 ip = ntohl(entry->array[i].network);
+			printf("        Neighbor %d: rid = %d, network = %hhu.%hhu.%hhu.%hhu\n", i, (int) ntohl(entry->array[i].rid), LE_IP_FMT_STR(ip));
+		}
 	}
-	fflush(stdout);
-	pthread_mutex_unlock(&mospf_lock);
 }
 
 
