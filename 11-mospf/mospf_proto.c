@@ -12,6 +12,7 @@ void mospf_init_hdr(struct mospf_hdr *mospf, u8 type, u16 len, u32 rid, u32 aid)
 	mospf->rid = htonl(rid);
 	mospf->aid = htonl(aid);
 	mospf->padding = 0;
+	mospf->checksum = mospf_checksum(mospf);
 }
 
 void mospf_init_hello(struct mospf_hello *hello, u32 mask)

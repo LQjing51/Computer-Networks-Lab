@@ -44,3 +44,25 @@ void handle_ip_packet(iface_info_t *iface, char *packet, int len)
 		ip_forward_packet(daddr, packet, len);
 	}
 }
+
+void ip_forward_packet(u32 dst, char *packet, int len) {
+	printf("ip packet: need forward\n"); 
+	struct iphdr *iph = packet_to_ip_hdr(packet);
+	if (--(iph->ttl) <= 0) {
+		icmp_send_packet(packet,len,ICMP_TIME_EXCEEDED,ICMP_EXC_TTL);
+		return;
+	}
+	iph->checksum = ip_checksum(iph);
+
+	rt_entry_t *res = longest_prefix_match(ntohl(iph->daddr));
+	if (!res) {
+		icmp_send_packet(packet,len,ICMP_DEST_UNREACH,ICMP_NET_UNREACH);
+		return;
+	}
+	u32 dst_ip;
+	if (!res->gw) dst_ip = ntohl(iph->daddr);
+	else dst_ip = res->gw;
+	iface_send_packet_by_arp(res->iface, dst_ip, packet, len);
+
+
+}
