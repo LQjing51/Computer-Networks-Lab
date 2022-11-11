@@ -107,7 +107,7 @@ void arpcache_append_packet(iface_info_t *iface, u32 ip4, char *packet, int len)
 // them out
 void arpcache_insert(u32 ip4, u8 mac[ETH_ALEN])
 {
-	printf("in arpcache_insert.\n");
+	// printf("in arpcache_insert.\n");
 	pthread_mutex_lock(&arpcache.lock);
 	int i;
 	for (i = 0; i < MAX_ARP_SIZE; i++) {
@@ -142,13 +142,12 @@ void arpcache_insert(u32 ip4, u8 mac[ETH_ALEN])
 	struct arp_req *entry, *entry_;
 	list_for_each_entry_safe(entry, entry_, &arpcache.req_list, list) {
 		if (entry->ip4 == ip4) {
-			printf("arpcache_insert: sending pend packet.\n");
+			// printf("arpcache_insert: sending pend packet.\n");
 			struct cached_pkt *cpkt, *cpkt_;
 			list_for_each_entry_safe(cpkt, cpkt_, &entry->cached_packets, list) {
 				struct ether_header *eh = (struct ether_header *) cpkt->packet;
 				memcpy(eh->ether_shost, entry->iface->mac, ETH_ALEN);
 				memcpy(eh->ether_dhost, mac, ETH_ALEN);
-				printf("arpcache_insert: send pend packet %llx\n", cpkt->packet);
 				iface_send_packet(entry->iface, cpkt->packet, cpkt->len);
 				list_delete_entry(&cpkt->list);
 				free(cpkt);
@@ -203,7 +202,7 @@ void *arpcache_sweep(void *arg)
 								if (iface->mac[j] != eh->ether_dhost[j]) break;
 							if (j == ETH_ALEN) {
 								// found iface
-								send_icmp_packet(cpkt->packet, iface, ICMP_DEST_UNREACH, 1);
+								icmp_send_packet(cpkt->packet, cpkt->len, iface, ICMP_DEST_UNREACH, 1);
 								flag = 1;
 								break;
 							}

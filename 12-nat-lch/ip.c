@@ -6,10 +6,12 @@
 #include "nat.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 void handle_ip_packet(iface_info_t *iface, char *packet, int len)
 {
-	struct iphdr *ip = packet_to_ip_hdr(packet);
+	struct ether_header *eh = (struct ether_header *) packet;
+	struct iphdr *iph = packet_to_ip_hdr(packet);
 	/* check if the packet is ICMP echo request */
 	if (iph->protocol == IPPROTO_ICMP) {
 		struct icmphdr *ich = (struct icmphdr *) IP_DATA(iph);

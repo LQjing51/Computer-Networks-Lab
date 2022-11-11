@@ -4,11 +4,13 @@
 #include "tcp.h"
 #include "rtable.h"
 #include "log.h"
+#include "arp.h"
 
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
+#include <stdio.h>
 
 static struct nat_table nat;
 
@@ -27,11 +29,11 @@ static iface_info_t *if_name_to_iface(const char *if_name)
 
 static int check_private_addr(u32 ip) {
 	//10.0.0.0/8
-	if (ip & 0xff000000 == 0x0a000000) return 1;
+	if ((ip & 0xff000000) == 0x0a000000) return 1;
 	//172.16.0.0/12
-	if (ip & 0xfff00000 == 0xac100000) return 1;
+	if ((ip & 0xfff00000) == 0xac100000) return 1;
 	//192.168.0.0/16
-	if (ip & 0xffff0000 == 0xc0a80000) return 1;
+	if ((ip & 0xffff0000) == 0xc0a80000) return 1;
 	return 0;
 }
 
@@ -57,11 +59,16 @@ void do_translation(iface_info_t *iface, char *packet, int len, int dir)
 	struct iphdr *iphdr = packet_to_ip_hdr(packet);
 	struct tcphdr *tcphdr = packet_to_tcp_hdr(packet);
 
+	// printf("recv packet, dir = %d\n", dir);
+
 	// get hash
 	u32 *buf = malloc(8);
 	if (dir == DIR_IN) buf[0] = ntohl(iphdr->saddr), buf[1] = ntohs(tcphdr->sport);
 	else buf[0] = ntohl(iphdr->daddr), buf[1] = ntohs(tcphdr->dport);
-	u8 hash = hash8(buf, 8);
+	u8 hash = hash8((char *) buf, 8);
+
+	// printf("hash = %d\n", (int) hash);
+
 	struct nat_mapping *map = NULL;
 	if (dir == DIR_IN) {
 		struct nat_mapping *entry;
@@ -83,6 +90,9 @@ void do_translation(iface_info_t *iface, char *packet, int len, int dir)
 
 	// check if we need to create a new mapping structure
 	if (!map) {
+
+		// printf("allocate a new mapping\n");
+
 		map = (struct nat_mapping *) malloc(sizeof(struct nat_mapping));
 		if (dir == DIR_IN) {
 			// find rule
@@ -111,8 +121,8 @@ void do_translation(iface_info_t *iface, char *packet, int len, int dir)
 			// find an available port
 			u16 new_port = 0, i;
 			for (i = NAT_PORT_MIN; i <= NAT_PORT_MAX; i++) {
-				if (!assigned_ports[i]) {
-					assigned_ports[i] = 1;
+				if (!nat.assigned_ports[i]) {
+					nat.assigned_ports[i] = 1;
 					new_port = i;
 					break;
 				}
@@ -157,14 +167,15 @@ void do_translation(iface_info_t *iface, char *packet, int len, int dir)
 		iphdr->saddr = htonl(map->external_ip);
 		tcphdr->sport = htons(map->external_port);
 	}
+
 	tcphdr->checksum = tcp_checksum(iphdr, tcphdr);
 	iphdr->checksum = ip_checksum(iphdr);
 
 	// send packet
 	if (dir == DIR_IN) {
-		iface_send_packet_by_arp(nat.internal_iface, ntohl(ip->daddr), packet, len);
+		iface_send_packet_by_arp(nat.internal_iface, ntohl(iphdr->daddr), packet, len);
 	} else {
-		iface_send_packet_by_arp(nat.external_iface, ntohl(ip->daddr), packet, len);
+		iface_send_packet_by_arp(nat.external_iface, ntohl(iphdr->daddr), packet, len);
 	}
 
 	pthread_mutex_unlock(&nat.lock);
@@ -172,6 +183,8 @@ void do_translation(iface_info_t *iface, char *packet, int len, int dir)
 
 void nat_translate_packet(iface_info_t *iface, char *packet, int len)
 {
+	// printf("in nat_translate_packet\n");
+
 	int dir = get_packet_direction(packet);
 	if (dir == DIR_INVALID) {
 		log(ERROR, "invalid packet direction, drop it.");
@@ -204,14 +217,13 @@ static int is_flow_finished(struct nat_connection *conn)
 void *nat_timeout()
 {
 	while (1) {
-		fprintf(stdout, "TODO: sweep finished flows periodically.\n");
 		sleep(1);
 
 		pthread_mutex_lock(&nat.lock);
 
 		time_t cur;
 		time(&cur);
-		u8 i;
+		int i;
 		for (i = 0; i < HASH_8BITS; i++) {
 			struct nat_mapping *map, *map_;
 			list_for_each_entry_safe(map, map_, &nat.nat_mapping_list[i], list) {
@@ -236,54 +248,59 @@ int parse_config(const char *filename)
 	char s[50];
 
 	while (~fscanf(f, "%s", s)) {
-		switch (s[0]) {
-			case 'i':
-			case 'e':
-				fscanf(f, "%s", s);
-				iface_info_t *iface;
-				int flag = 0;
-				list_for_each_entry(iface, &instance->iface_list, list) {
-					if (!strcmp(iface->name, s)) {
-						flag = 1;
-						break;
-					}
+		if (s[0] == 'i' || s[0] == 'e') {
+			char c = s[0];
+			fscanf(f, "%s", s);
+			iface_info_t *iface;
+			int flag = 0;
+			list_for_each_entry(iface, &instance->iface_list, list) {
+				if (!strcmp(iface->name, s)) {
+					flag = 1;
+					break;
 				}
-				if (!flag) printf("parse config error.\n");
-				if (s[0] == 'i')
-					nat.internal_iface = iface;
-				else
-					nat.external_iface = iface;
-				break;
-			case 'd':
-				struct dnat_rule *rule = (struct dnat_rule *) malloc(sizeof(struct dnat_rule));
-				fscanf(f, "%s", s);
-				u32 ip; u16 port;
-				int i, len;
-				// get ip and port from s
-				len = strlen(s);
-				ip = port = 0;
-				for (i = 0; s[i] != ':'; i++)
-					if (isdigit(s[i])) ip = ip * 10 + s[i] - '0';
-				for (; i < len; i++)
-					if (isdigit(s[i])) port = port * 10 + s[i] - '0';
-				rule->external_ip = ip;
-				rule->external_port = port;
-				fscanf(f, "%s", s);
-				fscanf(f, "%s", s);
-				// get ip and port from s (again)
-				len = strlen(s);
-				ip = port = 0;
-				for (i = 0; s[i] != ':'; i++)
-					if (isdigit(s[i])) ip = ip * 10 + s[i] - '0';
-				for (; i < len; i++)
-					if (isdigit(s[i])) port = port * 10 + s[i] - '0';
-				rule->internal_ip = ip;
-				rule->internal_port = port;
-				// insert new rule into rule table
-				list_add_head(&rule->list, &nat.rules);
-				break;
-			default:
-				printf("parse config error.\n");
+			}
+			if (!flag) printf("parse config error.\n");
+			if (c == 'i')
+				nat.internal_iface = iface;
+			else
+				nat.external_iface = iface;
+		} else if (s[0] == 'd') {
+			struct dnat_rule *rule = (struct dnat_rule *) malloc(sizeof(struct dnat_rule));
+			fscanf(f, "%s", s);
+			u32 ip, tmp; u16 port;
+			int i, len;
+			// get ip and port from s
+			len = strlen(s);
+			ip = port = tmp = 0;
+			for (i = 0; s[i] != ':'; i++) {
+				if (isdigit(s[i])) tmp = tmp * 10 + s[i] - '0';
+				else if (s[i] == '.') ip = (ip << 8) + tmp, tmp = 0;
+			}
+			ip = (ip << 8) + tmp;
+			for (; i < len; i++)
+				if (isdigit(s[i])) port = port * 10 + s[i] - '0';
+			rule->external_ip = ip;
+			rule->external_port = port;
+			fscanf(f, "%s", s);
+			fscanf(f, "%s", s);
+			// get ip and port from s (again)
+			len = strlen(s);
+			ip = port = tmp = 0;
+			for (i = 0; s[i] != ':'; i++) {
+				if (isdigit(s[i])) tmp = tmp * 10 + s[i] - '0';
+				else if (s[i] == '.') ip = (ip << 8) + tmp, tmp = 0;
+			}
+			ip = (ip << 8) + tmp;
+			for (; i < len; i++)
+				if (isdigit(s[i])) port = port * 10 + s[i] - '0';
+			rule->internal_ip = ip;
+			rule->internal_port = port;
+			// printf("ex:"IP_FMT":%d, in:"IP_FMT":%d\n", LE_IP_FMT_STR(rule->external_ip), (int) rule->external_port,\
+			// LE_IP_FMT_STR(rule->internal_ip), (int) rule->internal_port);
+			// insert new rule into rule table
+			list_add_head(&rule->list, &nat.rules);
+		} else {
+			printf("parse config error.\n");
 		}
 	}
 

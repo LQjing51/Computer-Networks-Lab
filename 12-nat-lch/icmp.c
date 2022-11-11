@@ -6,9 +6,12 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 // send icmp packet
 void icmp_send_packet(const char *packet, int len, iface_info_t *iface, u8 type, u8 code) {
+	printf("send packet, type = %d\n", (int) type);
+	
 	struct ether_header *eh = (struct ether_header *) packet;
 	struct iphdr *iph = packet_to_ip_hdr(packet);
 
@@ -38,6 +41,5 @@ void icmp_send_packet(const char *packet, int len, iface_info_t *iface, u8 type,
 	memcpy(new_eh->ether_dhost, eh->ether_shost, ETH_ALEN);
 	memcpy(new_eh->ether_shost, iface->mac, ETH_ALEN);
 
-	free(packet);
 	iface_send_packet(iface, new_packet, packet_len);
 }
