@@ -88,7 +88,7 @@ struct dnat_rule* find_rule(uint32_t external_ip,uint16_t external_port) {
 // checksum, update the statistics of the tcp connection
 void do_translation(iface_info_t *iface, char *packet, int len, int dir)
 {
-	fprintf(stdout, "TODO: do translation for this packet.\n");
+	// fprintf(stdout, "TODO: do translation for this packet.\n");
 
 	pthread_mutex_lock(&nat.lock);
 	
@@ -96,27 +96,27 @@ void do_translation(iface_info_t *iface, char *packet, int len, int dir)
 	struct tcphdr* tcp = packet_to_tcp_hdr(packet);
 	u32 saddr = ntohl(ip->saddr);
 	u32 daddr = ntohl(ip->daddr);
-	fprintf(stdout, "packet saddr is "IP_FMT".\n", HOST_IP_FMT_STR(saddr));
-	fprintf(stdout, "packet daddr is "IP_FMT".\n", HOST_IP_FMT_STR(daddr));
+	fprintf(stdout, "packet saddr is "IP_FMT":%d\n", HOST_IP_FMT_STR(saddr),ntohs(tcp->sport));
+	fprintf(stdout, "packet daddr is "IP_FMT":%d\n", HOST_IP_FMT_STR(daddr),ntohs(tcp->dport));
 	//get map key
 	char* buf = malloc(4);
 	u32 origin_key = (dir == DIR_IN)? (ntohl(ip->saddr)+ntohs(tcp->sport)):
 				(ntohl(ip->daddr)+ntohs(tcp->dport));
 	memcpy(buf, &origin_key,4);
 	u8 key = hash8(buf, 4);
-	printf("origin_key = %d, key = %d\n",origin_key,key);
+	// printf("origin_key = %d, key = %d\n",origin_key,key);
 	//get map entry
 	struct list_head* head = &nat.nat_mapping_list[key];
-	if (head) printf("nat.nat_mappping_list[key] is not empty\n");
-	else printf("nat.nat_mappping_list[key] is empty\n");
+	// if (head) printf("nat.nat_mappping_list[key] is not empty\n");
+	// else printf("nat.nat_mappping_list[key] is empty\n");
 	struct nat_mapping* map_entry = NULL;
 	if(dir == DIR_IN){
 		map_entry = traverse_hash_list(head,ntohl(ip->daddr),ntohs(tcp->dport),DIR_IN);
 	}else{
 		map_entry = traverse_hash_list(head,ntohl(ip->saddr),ntohs(tcp->sport),DIR_OUT);
 	}
-	if (map_entry) printf("find a no empty map entry\n");
-	else printf("could not find a corret map entry\n");
+	// if (map_entry) printf("find a no empty map entry\n");
+	// else printf("could not find a corret map entry\n");
 	if (!map_entry) {
 		map_entry = (struct nat_mapping*)malloc(sizeof(struct nat_mapping));
 		if(dir == DIR_IN) {
@@ -180,8 +180,10 @@ void do_translation(iface_info_t *iface, char *packet, int len, int dir)
 	ip->checksum = ip_checksum(ip);
 	tcp->checksum = tcp_checksum(ip,tcp);
 
+	usleep(100000);
+
 	//resend
-	printf("send packet by arp\n");
+	// printf("send packet by arp\n");
 	if(dir == DIR_IN){
 		pthread_mutex_unlock(&nat.lock);
 		iface_send_packet_by_arp(nat.internal_iface,ntohl(ip->daddr),packet,len);
