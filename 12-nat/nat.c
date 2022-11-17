@@ -96,8 +96,8 @@ void do_translation(iface_info_t *iface, char *packet, int len, int dir)
 	struct tcphdr* tcp = packet_to_tcp_hdr(packet);
 	u32 saddr = ntohl(ip->saddr);
 	u32 daddr = ntohl(ip->daddr);
-	fprintf(stdout, "packet saddr is "IP_FMT":%d\n", HOST_IP_FMT_STR(saddr),ntohs(tcp->sport));
-	fprintf(stdout, "packet daddr is "IP_FMT":%d\n", HOST_IP_FMT_STR(daddr),ntohs(tcp->dport));
+	// fprintf(stdout, "packet saddr is "IP_FMT".\n", HOST_IP_FMT_STR(saddr));
+	// fprintf(stdout, "packet daddr is "IP_FMT".\n", HOST_IP_FMT_STR(daddr));
 	//get map key
 	char* buf = malloc(4);
 	u32 origin_key = (dir == DIR_IN)? (ntohl(ip->saddr)+ntohs(tcp->sport)):
@@ -150,7 +150,7 @@ void do_translation(iface_info_t *iface, char *packet, int len, int dir)
 		}
 		memset(&map_entry->conn,0,sizeof(struct nat_connection));
  		list_add_tail(&map_entry->list,head);
-		printf("create a new map enrty\n");
+		// printf("create a new map enrty\n");
 	}
 
 	//update conn
@@ -180,8 +180,6 @@ void do_translation(iface_info_t *iface, char *packet, int len, int dir)
 	ip->checksum = ip_checksum(ip);
 	tcp->checksum = tcp_checksum(ip,tcp);
 
-	usleep(100000);
-
 	//resend
 	// printf("send packet by arp\n");
 	if(dir == DIR_IN){
@@ -197,8 +195,8 @@ void do_translation(iface_info_t *iface, char *packet, int len, int dir)
 void nat_translate_packet(iface_info_t *iface, char *packet, int len)
 {
 	int dir = get_packet_direction(packet);
-	if (dir == 1) printf("\ndir = DIR_IN\n");//1 DIR_IN 2 DIR_OUT
-	if (dir == 2) printf("\ndir = DIR_OUT\n");
+	// if (dir == 1) printf("\ndir = DIR_IN\n");//1 DIR_IN 2 DIR_OUT
+	// if (dir == 2) printf("\ndir = DIR_OUT\n");
 	if (dir == DIR_INVALID) {
 		log(ERROR, "invalid packet direction, drop it.");
 		icmp_send_packet(packet, len, ICMP_DEST_UNREACH, ICMP_HOST_UNREACH);
@@ -255,7 +253,7 @@ void *nat_timeout()
 
 int parse_config(const char *filename)
 {
-	fprintf(stdout, "TODO: parse config file, including i-iface, e-iface (and dnat-rules if existing).\n");
+	// fprintf(stdout, "TODO: parse config file, including i-iface, e-iface (and dnat-rules if existing).\n");
 	pthread_mutex_lock(&nat.lock);
 	
 	FILE* fd = fopen(filename,"r");
@@ -325,16 +323,16 @@ int parse_config(const char *filename)
 		rule->internal_port = port;
 		list_add_tail(&rule->list, &nat.rules);
 	}
-	u32 nat_ex_ip = nat.external_iface->ip;
-	u32 nat_in_ip = nat.internal_iface->ip;
-	printf("nat.external_ip = %hhu.%hhu.%hhu.%hhu, nat.internal_ip = %hhu.%hhu.%hhu.%hhu\n",LE_IP_FMT_STR(nat_ex_ip),LE_IP_FMT_STR(nat_in_ip));
-	struct dnat_rule *rule = NULL;
-	list_for_each_entry(rule, &nat.rules, list) {
-		u32 rule_ex_ip = rule->external_ip;
-		u32 rule_in_ip = rule->internal_ip;
-		printf("rule->external_ip = %hhu.%hhu.%hhu.%hhu, rule->external_port = %d\n",LE_IP_FMT_STR(rule_ex_ip),rule->external_port);
-		printf("rule->internal_ip = %hhu.%hhu.%hhu.%hhu, rule->internal_port = %d\n",LE_IP_FMT_STR(rule_in_ip),rule->internal_port);
-	}
+	// u32 nat_ex_ip = nat.external_iface->ip;
+	// u32 nat_in_ip = nat.internal_iface->ip;
+	// printf("nat.external_ip = %hhu.%hhu.%hhu.%hhu, nat.internal_ip = %hhu.%hhu.%hhu.%hhu\n",LE_IP_FMT_STR(nat_ex_ip),LE_IP_FMT_STR(nat_in_ip));
+	// struct dnat_rule *rule = NULL;
+	// list_for_each_entry(rule, &nat.rules, list) {
+	// 	u32 rule_ex_ip = rule->external_ip;
+	// 	u32 rule_in_ip = rule->internal_ip;
+	// 	printf("rule->external_ip = %hhu.%hhu.%hhu.%hhu, rule->external_port = %d\n",LE_IP_FMT_STR(rule_ex_ip),rule->external_port);
+	// 	printf("rule->internal_ip = %hhu.%hhu.%hhu.%hhu, rule->internal_port = %d\n",LE_IP_FMT_STR(rule_in_ip),rule->internal_port);
+	// }
 
 	pthread_mutex_unlock(&nat.lock);
 	return 0;
