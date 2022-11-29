@@ -81,6 +81,9 @@ struct tcp_sock {
 	// used to pend out-of-order packets
 	struct list_head rcv_ofo_buf;
 
+	// recv lock
+	pthread_mutex_lock_t lock;
+
 	// tcp state, see enum tcp_state in tcp.h
 	int state;
 

@@ -4,6 +4,8 @@
 
 #include <unistd.h>
 
+const char *data = "I Love Compute Network.";
+
 // tcp server application, listens to port (specified by arg) and serves only one
 // connection request
 void *tcp_server(void *arg)
@@ -30,8 +32,33 @@ void *tcp_server(void *arg)
 
 	log(DEBUG, "accept a connection.");
 
-	sleep(5);
+	/* expr 2 */
+	int len = strlen(data);
+	tcp_sock_read(tsk, data, len);
 
+	printf("server recv: %s\n", data);
+
+	tcp_sock_write(tsk, data, len);
+
+	/* expr 3 */
+	// FILE *f = fopen("server-output.dat", "w");
+
+	// #define MAX_LEN 10000
+	// char *buf = malloc(MAX_LEN);
+	// int i, len;
+	// while (!tcp_sock_read(tsk, &len, 4)) ;
+
+	// printf("server: will recv %d bytes.\n", len);
+
+	// while (len) {
+	// 	int ret = tcp_sock_read(tsk, buf, min(MAX_LEN, len));
+	// 	for (i = 0; i < ret; i++) fprintf(f, "%c", buf[i]);
+	// 	len -= ret;
+	// }
+
+	// fclose(f);
+
+	sleep(5);
 	tcp_sock_close(csk);
 	
 	return NULL;
@@ -51,8 +78,36 @@ void *tcp_client(void *arg)
 		exit(1);
 	}
 
-	sleep(1);
+	/* expr 2 */
+	int len = strlen(data);
+	tcp_sock_write(tsk, data, len);
 
+	printf("client send: %s\n", data);
+
+	char *buf = malloc(len);
+	tcp_sock_read(tsk, buf, len);
+
+	printf("client recv: %s\n", buf);
+
+	/* expr 3 */
+	// FILE *f = fopen("client-input.dat", "r");
+	// fseek(f, 0, SEEK_END);
+	// int len = ftell(f);
+	// fseek(f, 0, SEEK_SET);
+
+	// printf("client: will send %d bytes.\n", len);
+
+	// char *buf = malloc(len);
+	// int i = 0;
+	// char c;
+	// while ((c = getchar()) != EOF) buf[i++] = c;
+
+	// tcp_sock_write(tsk, &len, 4);	//send length first
+	// tcp_sock_write(tsk, buf, len);
+
+	// fclose(f);
+
+	sleep(1);
 	tcp_sock_close(tsk);
 
 	return NULL;

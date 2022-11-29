@@ -176,16 +176,14 @@ void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 
 	// handle payload
 	if (cb->pl_len) {
-		printf("in cb->pl_len\n");
-		// pthread_mutex_lock(&tsk->lock);
-		// write_ring_buffer(tsk->rcv_buf, cb->payload, cb->pl_len);
-		// pthread_mutex_unlock(&tsk->lock);
+		pthread_mutex_lock(&tsk->lock);
+		write_ring_buffer(tsk->rcv_buf, cb->payload, cb->pl_len);
+		pthread_mutex_unlock(&tsk->lock);
 
+		// send ACK
+		tcp_send_control_packet(tsk, TCP_ACK);
 
-		// // send ACK
-		// tcp_send_control_packet(tsk, TCP_ACK);
-
-		// // wake up wait_recv
-		// wake_up(tsk->wait_recv);
+		// wake up wait_recv
+		wake_up(tsk->wait_recv);
 	}
 }

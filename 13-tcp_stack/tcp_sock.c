@@ -342,3 +342,37 @@ void tcp_sock_close(struct tcp_sock *tsk)
 	
 	tcp_set_state(tsk, tsk->state == TCP_ESTABLISHED ? TCP_FIN_WAIT_1 : TCP_LAST_ACK);
 }
+
+int tcp_sock_read(struct tcp_sock *tsk, char *buf, int len) {
+	pthread_mutex_lock(&tsk->lock);
+	while (ring_buffer_empty(tsk->rcv_buf)) {
+		if (tsk->state != TCP_ESTABLISHED && tsk->state != TCP_FIN_WAIT_1 && tsk->state != TCP_FIN_WAIT_2) {
+			// should not recv data
+			pthread_mutex_unlock(&tsk->lock);
+			return 0;
+		}
+		sleep_on(tsk->wait_recv);
+	}
+	int ret = read_ring_buffer(tsk->rcv_buf, buf, len);
+	pthread_mutex_unlock(&tsk->lock);
+	return ret;
+}
+
+int tcp_sock_write(struct tcp_sock *tsk, char *buf, int len) {
+	int tot = 0;
+	int hdr_len = ETHER_HDR_SIZE + IP_BASE_HDR_SIZE + TCP_BASE_HDR_SIZE;
+	int max_data_len = ETH_FRAME_LEN - hdr_len;
+	while (len) {
+		int send_len = len > max_data_len ? max_data_len : len;
+		while (!less_or_equal_32b(tsk->snd_una + tsk->snd_wnd, tsk->snd_nxt + send_len)) {
+			sleep_on(tsk->wait_send);
+		}
+		char *packet = malloc(len);
+		memcpy(packet + hdr_len, buf, send_len);
+		tcp_send_packet(tsk, packet, hdr_len + send_len);
+		len -= send_len;
+		buf += send_len;
+		tot += send_len;
+	}
+	return tot;
+}
