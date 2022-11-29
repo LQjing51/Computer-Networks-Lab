@@ -387,6 +387,7 @@ int tcp_sock_write(struct tcp_sock *tsk, char *buf, int len) {
 		}
 		char *packet = malloc(hdr_len + send_len);
 		memcpy(packet + hdr_len, buf, send_len);
+		// printf("send packet out: len = %d\n", send_len);
 		tcp_send_packet(tsk, packet, hdr_len + send_len);
 		len -= send_len;
 		buf += send_len;
