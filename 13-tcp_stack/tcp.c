@@ -74,8 +74,6 @@ void handle_tcp_packet(char *packet, struct iphdr *ip, struct tcphdr *tcp)
 
 	struct tcp_cb cb;
 	tcp_cb_init(ip, tcp, &cb);
-
 	struct tcp_sock *tsk = tcp_sock_lookup(&cb);
-
 	tcp_process(tsk, &cb, packet);
 }

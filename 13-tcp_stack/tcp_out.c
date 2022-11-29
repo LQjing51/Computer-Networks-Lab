@@ -82,10 +82,12 @@ void tcp_send_control_packet(struct tcp_sock *tsk, u8 flags)
 			tsk->rcv_nxt, flags, tsk->rcv_wnd);
 
 	tcp->checksum = tcp_checksum(ip, tcp);
+	ip->checksum = ip_checksum(ip);
 
 	if (flags & (TCP_SYN|TCP_FIN))
 		tsk->snd_nxt += 1;
 
+	// printf("send control packet, flags = %d\n",flags);
 	ip_send_packet(packet, pkt_size);
 }
 

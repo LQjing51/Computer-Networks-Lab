@@ -55,6 +55,8 @@ struct tcp_sock *alloc_tcp_sock()
 	init_list_head(&tsk->list);
 	init_list_head(&tsk->listen_queue);
 	init_list_head(&tsk->accept_queue);
+	init_list_head(&tsk->hash_list);
+	init_list_head(&tsk->bind_hash_list);
 
 	tsk->rcv_buf = alloc_ring_buffer(tsk->rcv_wnd);
 
@@ -84,7 +86,7 @@ struct tcp_sock *tcp_sock_lookup_established(u32 saddr, u32 daddr, u16 sport, u1
 {
 	struct tcp_sock *tsk;
 	int key = tcp_hash_function(saddr, daddr, sport, dport);
-	list_for_each_entry(tsk, &tcp_established_sock_table[key], list) {
+	list_for_each_entry(tsk, &tcp_established_sock_table[key], hash_list) {
 		if (tsk->sk_sip == saddr && tsk->sk_dip == daddr && tsk->sk_sport == sport && tsk->sk_dport == dport)
 			return tsk;
 	}
@@ -99,7 +101,7 @@ struct tcp_sock *tcp_sock_lookup_listen(u32 saddr, u16 sport)
 {
 	struct tcp_sock *tsk;
 	int key = tcp_hash_function(0, 0, sport, 0);
-	list_for_each_entry(tsk, &tcp_listen_sock_table[key], list) {
+	list_for_each_entry(tsk, &tcp_listen_sock_table[key], hash_list) {
 		if (tsk->sk_sport == sport)
 			return tsk;
 	}
@@ -115,10 +117,9 @@ struct tcp_sock *tcp_sock_lookup(struct tcp_cb *cb)
 	u16 sport = cb->dport,
 		dport = cb->sport;
 
-	struct tcp_sock *tsk = tcp_sock_lookup_established(saddr, daddr, sport, dport);
+	struct tcp_sock *tsk = tcp_sock_lookup_established(saddr, daddr, sport, dport);\
 	if (!tsk)
 		tsk = tcp_sock_lookup_listen(saddr, sport);
-
 	return tsk;
 }
 
@@ -251,7 +252,7 @@ int tcp_sock_connect(struct tcp_sock *tsk, struct sock_addr *skaddr)
 	tsk->sk_dip = ntohl(skaddr->ip);
 	tsk->sk_dport = ntohs(skaddr->port);
 	// assume that we have only one iface
-	iface_info_t *iface = (iface_info_t *) instance->iface_list->next;
+	iface_info_t *iface = (iface_info_t *) instance->iface_list.next;
 	tsk->sk_sip = iface->ip;
 	tcp_sock_set_sport(tsk, tcp_get_port());
 
@@ -324,6 +325,7 @@ struct tcp_sock *tcp_sock_accept(struct tcp_sock *tsk)
 		sleep_on(tsk->wait_accept);
 	}
 
+	// printf("accpet_queue not empty\n");
 	struct tcp_sock *csk = tcp_sock_accept_dequeue(tsk);
 
 	// add csk into tcp_established_sock_table (csk can receive packet from now on)

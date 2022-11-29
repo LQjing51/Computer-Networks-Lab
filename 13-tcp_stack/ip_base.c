@@ -50,11 +50,12 @@ void ip_send_packet(char *packet, int len)
 	struct iphdr *iph = (struct iphdr *) (packet + ETHER_HDR_SIZE);
 
 	iface_info_t *iface;
+	int flag = 0;
 	list_for_each_entry(iface, &instance->iface_list, list) {
-		if (iface->ip == ntohl(iph->saddr)) break;
+		if (iface->ip == ntohl(iph->saddr)) {flag = 1; break;}
 	}
 
-	if (!iface) {
+	if (!flag) {
 		printf("ip_send_packet: cannot find corresponding iface!\n");
 		return;
 	}
