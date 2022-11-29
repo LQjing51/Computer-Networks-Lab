@@ -11,10 +11,10 @@
 // if the snd_wnd before updating is zero, notify tcp_sock_send (wait_send)
 static inline void tcp_update_window(struct tcp_sock *tsk, struct tcp_cb *cb)
 {
-	pthread_mutex_lock(&tsk->lock);
+	// pthread_mutex_lock(&tsk->lock);
 	u16 old_snd_wnd = tsk->snd_wnd;
 	tsk->snd_wnd = cb->rwnd - (tsk->snd_nxt - tsk->snd_una);
-	pthread_mutex_unlock(&tsk->lock);
+	// pthread_mutex_unlock(&tsk->lock);
 	if (old_snd_wnd == 0)
 		wake_up(tsk->wait_send);
 }
