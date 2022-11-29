@@ -386,7 +386,9 @@ int tcp_sock_write(struct tcp_sock *tsk, char *buf, int len) {
 		len -= send_len;
 		buf += send_len;
 		tot += send_len;
-		// tsk->snd_wnd -= send_len;
+		pthread_mutex_lock(&tsk->lock);
+		tsk->snd_wnd -= send_len;
+		pthread_mutex_unlock(&tsk->lock);
 	}
 	return tot;
 }
