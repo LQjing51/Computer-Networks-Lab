@@ -11,20 +11,20 @@
 // if the snd_wnd before updating is zero, notify tcp_sock_send (wait_send)
 static inline void tcp_update_window(struct tcp_sock *tsk, struct tcp_cb *cb)
 {
-	// u16 old_snd_wnd = tsk->snd_wnd;
+	u16 old_snd_wnd = tsk->snd_wnd;
 	tsk->snd_wnd = cb->rwnd;
-	// if (old_snd_wnd == 0)
-	// 	wake_up(tsk->wait_send);
+	if (old_snd_wnd == 0)
+		wake_up(tsk->wait_send);
 }
 
 // update the snd_wnd safely: cb->ack should be between snd_una and snd_nxt
 static inline void tcp_update_window_safe(struct tcp_sock *tsk, struct tcp_cb *cb)
 {
 	if (less_or_equal_32b(tsk->snd_una, cb->ack) && less_or_equal_32b(cb->ack, tsk->snd_nxt)){
-		// tcp_update_window(tsk, cb);
-		tsk->snd_una = cb->ack;
 		tcp_update_window(tsk, cb);
-		wake_up(tsk->wait_send);
+		// tsk->snd_una = cb->ack;
+		// tcp_update_window(tsk, cb);
+		// wake_up(tsk->wait_send);
 	}
 }
 
@@ -182,6 +182,7 @@ void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 		pthread_mutex_lock(&tsk->lock);
 		// printf("server get lock\n");
 		write_ring_buffer(tsk->rcv_buf, cb->payload, cb->pl_len);
+		tsk->rcv_wnd -= cb->pl_len;
 		pthread_mutex_unlock(&tsk->lock);
 		// printf("server unlock\n");
 		// send ACK
