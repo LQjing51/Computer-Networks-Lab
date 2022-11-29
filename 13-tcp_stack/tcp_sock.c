@@ -65,6 +65,7 @@ struct tcp_sock *alloc_tcp_sock()
 	tsk->wait_recv = alloc_wait_struct();
 	tsk->wait_send = alloc_wait_struct();
 
+	pthread_mutex_init(&tsk->lock, NULL);
 	return tsk;
 }
 
@@ -330,6 +331,7 @@ struct tcp_sock *tcp_sock_accept(struct tcp_sock *tsk)
 
 	// add csk into tcp_established_sock_table (csk can receive packet from now on)
 	tcp_hash(csk);
+	wake_up(csk->wait_connect);
 
 	return csk;
 }
@@ -345,17 +347,31 @@ void tcp_sock_close(struct tcp_sock *tsk)
 
 int tcp_sock_read(struct tcp_sock *tsk, char *buf, int len) {
 	pthread_mutex_lock(&tsk->lock);
-	while (ring_buffer_empty(tsk->rcv_buf)) {
-		if (tsk->state != TCP_ESTABLISHED && tsk->state != TCP_FIN_WAIT_1 && tsk->state != TCP_FIN_WAIT_2) {
-			// should not recv data
+	// printf("read get lock\n");
+	int tot = 0;
+	while(len) {
+		while (ring_buffer_empty(tsk->rcv_buf)) {
 			pthread_mutex_unlock(&tsk->lock);
-			return 0;
+			// printf("sleep unlock\n");
+			if (tsk->state != TCP_ESTABLISHED && tsk->state != TCP_FIN_WAIT_1 && tsk->state != TCP_FIN_WAIT_2) {
+				// should not recv data
+				// printf("exception return:%d\n",tsk->state);
+				return tot;
+			}
+			sleep_on(tsk->wait_recv);
+			// printf("after sleep\n");
+			pthread_mutex_lock(&tsk->lock);
+			// printf("wake up get lock\n");
 		}
-		sleep_on(tsk->wait_recv);
+		int ret = read_ring_buffer(tsk->rcv_buf, buf, len);
+		// printf("read_ring_buffer ret = %d\n",ret);
+		buf += ret;
+		len -= ret;
+		tot += ret;
 	}
-	int ret = read_ring_buffer(tsk->rcv_buf, buf, len);
 	pthread_mutex_unlock(&tsk->lock);
-	return ret;
+	// printf("read unlock\n");
+	return tot;
 }
 
 int tcp_sock_write(struct tcp_sock *tsk, char *buf, int len) {
@@ -364,10 +380,12 @@ int tcp_sock_write(struct tcp_sock *tsk, char *buf, int len) {
 	int max_data_len = ETH_FRAME_LEN - hdr_len;
 	while (len) {
 		int send_len = len > max_data_len ? max_data_len : len;
-		while (!less_or_equal_32b(tsk->snd_una + tsk->snd_wnd, tsk->snd_nxt + send_len)) {
+		// printf("tsk->snd_una=%u\ttsk->snd_wnd=%u\ttsk->snd_nxt=%u\tlen=%d\n",tsk->snd_una,tsk->snd_wnd,tsk->snd_nxt,send_len);
+		while (less_or_equal_32b(tsk->snd_una + tsk->snd_wnd, tsk->snd_nxt + send_len)) {
+			// printf("write needs sleep\n");
 			sleep_on(tsk->wait_send);
 		}
-		char *packet = malloc(len);
+		char *packet = malloc(hdr_len + send_len);
 		memcpy(packet + hdr_len, buf, send_len);
 		tcp_send_packet(tsk, packet, hdr_len + send_len);
 		len -= send_len;

@@ -34,11 +34,12 @@ void *tcp_server(void *arg)
 
 	/* expr 2 */
 	int len = strlen(data);
-	tcp_sock_read(tsk, data, len);
+	char *buffer = (char*)malloc(len+1);
+	int ret = tcp_sock_read(csk, buffer, len);
+	buffer[ret] = '\0';
+	printf("server recv: %s\n", buffer);
 
-	printf("server recv: %s\n", data);
-
-	tcp_sock_write(tsk, data, len);
+	tcp_sock_write(csk, buffer, len);
 
 	/* expr 3 */
 	// FILE *f = fopen("server-output.dat", "w");
@@ -46,12 +47,12 @@ void *tcp_server(void *arg)
 	// #define MAX_LEN 10000
 	// char *buf = malloc(MAX_LEN);
 	// int i, len;
-	// while (!tcp_sock_read(tsk, &len, 4)) ;
+	// while (!tcp_sock_read(csk, &len, 4)) ;
 
 	// printf("server: will recv %d bytes.\n", len);
 
 	// while (len) {
-	// 	int ret = tcp_sock_read(tsk, buf, min(MAX_LEN, len));
+	// 	int ret = tcp_sock_read(csk, buf, min(MAX_LEN, len));
 	// 	for (i = 0; i < ret; i++) fprintf(f, "%c", buf[i]);
 	// 	len -= ret;
 	// }
@@ -84,9 +85,9 @@ void *tcp_client(void *arg)
 
 	printf("client send: %s\n", data);
 
-	char *buf = malloc(len);
-	tcp_sock_read(tsk, buf, len);
-
+	char *buf = malloc(len+1);
+	int ret = tcp_sock_read(tsk, buf, len);
+	buf[ret] = '\0';
 	printf("client recv: %s\n", buf);
 
 	/* expr 3 */

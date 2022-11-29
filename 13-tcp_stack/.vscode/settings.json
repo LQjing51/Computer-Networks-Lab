@@ -1,5 +1,6 @@
 {
     "files.associations": {
-        "arpcache.h": "c"
+        "arpcache.h": "c",
+        "tcp_sock.h": "c"
     }
 }

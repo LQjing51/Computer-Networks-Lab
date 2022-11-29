@@ -82,7 +82,7 @@ struct tcp_sock {
 	struct list_head rcv_ofo_buf;
 
 	// recv lock
-	pthread_mutex_lock_t lock;
+	pthread_mutex_t lock;
 
 	// tcp state, see enum tcp_state in tcp.h
 	int state;

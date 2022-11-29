@@ -50,7 +50,7 @@ static inline int is_tcp_seq_valid(struct tcp_sock *tsk, struct tcp_cb *cb)
 // Process the incoming packet according to TCP state machine. 
 void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 {
-	// printf("flags = %d\n",cb->flags);
+	// printf("receive packet, flags = %d,state = %d\n",cb->flags, tsk->state);
 	if (tsk->state == TCP_LISTEN) {
 		if (cb->flags & TCP_SYN) {
 			/* new SYN request */
@@ -86,12 +86,13 @@ void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 
 					// add csk into parent's accept queue
 					tcp_sock_accept_enqueue(csk);
-
+	
 					// connection established
 					tcp_set_state(csk, TCP_ESTABLISHED);
 
 					// wake up tcp_sock_accept
 					wake_up(tsk->wait_accept);
+					sleep_on(csk->wait_connect);
 					break;
 				}
 			}
@@ -143,6 +144,7 @@ void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 			tcp_set_timewait_timer(tsk);
 
 			tcp_set_state(tsk, TCP_TIME_WAIT);
+			wake_up(tsk->wait_recv);
 			return;
 		}
 	}
@@ -169,21 +171,24 @@ void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 			tcp_send_control_packet(tsk, TCP_ACK);
 
 			tcp_set_state(tsk, TCP_CLOSE_WAIT);
-
+			wake_up(tsk->wait_recv);
 			return;
 		}
 	}
 
 	// handle payload
 	if (cb->pl_len) {
+		// printf("cb->pl_len = %d\n",cb->pl_len);
 		pthread_mutex_lock(&tsk->lock);
+		// printf("server get lock\n");
 		write_ring_buffer(tsk->rcv_buf, cb->payload, cb->pl_len);
 		pthread_mutex_unlock(&tsk->lock);
-
+		// printf("server unlock\n");
 		// send ACK
 		tcp_send_control_packet(tsk, TCP_ACK);
 
 		// wake up wait_recv
 		wake_up(tsk->wait_recv);
+		// printf("wake up wait_recv\n");
 	}
 }
