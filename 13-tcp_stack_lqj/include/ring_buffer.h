@@ -6,11 +6,11 @@
 #include <string.h>
 
 struct ring_buffer {
+	pthread_mutex_t lock;
 	int size;
 	int head;		// read from head
 	int tail;		// write from tail
 	char buf[0];
-	pthread_mutex_t lock;
 };
 
 static inline struct ring_buffer *alloc_ring_buffer(int size)

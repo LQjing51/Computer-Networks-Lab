@@ -66,6 +66,7 @@ struct tcp_sock *alloc_tcp_sock()
 	tsk->wait_send = alloc_wait_struct();
 
 	pthread_mutex_init(&tsk->rcv_buf->lock, NULL);
+	tsk->accept_backlog = 0;
 	return tsk;
 }
 
@@ -129,9 +130,12 @@ struct tcp_sock *tcp_sock_lookup(struct tcp_cb *cb)
 		dport = cb->sport;
 
 	struct tcp_sock *tsk = tcp_sock_lookup_established(saddr, daddr, sport, dport);
-	if (!tsk)
+	if (!tsk){
+		// printf("establish not find\n");
 		tsk = tcp_sock_lookup_listen(saddr, sport);
-
+	}
+	// if (!tsk) printf("do not find a tsk\n");
+	// else printf("find a tsk,state = %s\n",tcp_state_str[tsk->state]);
 	return tsk;
 }
 
@@ -261,24 +265,26 @@ int tcp_sock_bind(struct tcp_sock *tsk, struct sock_addr *skaddr)
 //    means the connection is established.
 int tcp_sock_connect(struct tcp_sock *tsk, struct sock_addr *skaddr)
 {
-	fprintf(stdout, "TODO: implement %s please.\n", __FUNCTION__);
+	// fprintf(stdout, "TODO: implement %s please.\n", __FUNCTION__);
 
 	tsk->sk_dip = ntohl(skaddr->ip);
 	tsk->sk_dport = ntohs(skaddr->port);
-	iface_info_t *iface = (iface_info_t *) instance->iface_list->next;
+	iface_info_t *iface = (iface_info_t *) instance->iface_list.next;
 	tsk->sk_sip = iface->ip;
 	//set port and hash to bind table
 	tcp_sock_set_sport(tsk, tcp_get_port());
 
-	// set iss
-	// tsk->iss = tsk->snd_nxt = tcp_new_iss();
-
+	// tsk->snd_nxt = tcp_new_iss();
+	// tsk->snd_una = tsk->snd_nxt;
+	
+	tcp_send_control_packet(tsk, TCP_SYN);
+	tcp_set_state(tsk, TCP_SYN_SENT);
 	//hash to establish table as its quadruple has been decided
 	tcp_hash(tsk);
 
-	// send SYN packet
-	tcp_send_control_packet(tsk, TCP_SYN);
-	tcp_set_state(tsk, TCP_SYN_SENT);
+	log(DEBUG, IP_FMT":%hu, "IP_FMT":%hu", \
+			HOST_IP_FMT_STR(tsk->sk_sip), tsk->sk_sport, \
+			HOST_IP_FMT_STR(tsk->sk_dip), tsk->sk_dport);
 
 	// wait
 	int ret = sleep_on(tsk->wait_connect);
@@ -294,9 +300,10 @@ int tcp_sock_listen(struct tcp_sock *tsk, int backlog)
 	// fprintf(stdout, "TODO: implement %s please.\n", __FUNCTION__);
 	tsk->backlog = backlog;
 	tcp_set_state(tsk, TCP_LISTEN);
+	// printf("port = %hu\n",tsk->sk_sport);
 	//already hash to bind table, only need to hash to listen table
-	tcp_hash(tsk);
-	return -1;
+	return tcp_hash(tsk);
+	
 }
 
 // check whether the accept queue is full
@@ -352,46 +359,75 @@ void tcp_sock_close(struct tcp_sock *tsk)
 	// activate close
 	if(tsk->state == TCP_ESTABLISHED){
 		tcp_set_state(tsk,TCP_FIN_WAIT_1);
-		tcp_send_control_packet(tsk,TCP_FIN);
+		tcp_send_control_packet(tsk,TCP_FIN|TCP_ACK);
 	}else if(tsk->state == TCP_CLOSE_WAIT){
 		tcp_set_state(tsk,TCP_LAST_ACK);
-		tcp_send_control_packet(tsk,TCP_FIN);
+		tcp_send_control_packet(tsk,TCP_FIN|TCP_ACK);
 	}
 }
 int tcp_sock_read(struct tcp_sock *tsk, char *buf, int len) {
-	pthread_mutex_lock(&tsk->rev_buf->lock);
+	pthread_mutex_lock(&tsk->rcv_buf->lock);
+	// printf("read get lock\n");
 	while (ring_buffer_empty(tsk->rcv_buf)) {
-		pthread_mutex_unlock(&tsk->rev_buf->lock);
+		pthread_mutex_unlock(&tsk->rcv_buf->lock);
+		// printf("read go to sleep: lock\n");
 		if (tsk->state != TCP_ESTABLISHED && tsk->state != TCP_FIN_WAIT_1 && tsk->state != TCP_FIN_WAIT_2) {
 			return 0;
 		}
 		sleep_on(tsk->wait_recv);
-		pthread_mutex_lock(&tsk->rev_buf->lock);
+		pthread_mutex_lock(&tsk->rcv_buf->lock);
+		// printf("read wake up unlock\n");
 	}
 	int ret = read_ring_buffer(tsk->rcv_buf, buf, len);
-	tsk->rcv_wnd = ring_buffer_free(tsk->rcv_buf);
-	pthread_mutex_unlock(&tsk->rev_buf->lock);
+	// tsk->rcv_wnd = ring_buffer_free(tsk->rcv_buf);
+	pthread_mutex_unlock(&tsk->rcv_buf->lock);
+	// printf("read unlock\n");
 	return ret;
 }
 
 int tcp_sock_write(struct tcp_sock *tsk, char *buf, int len) {
+	// printf("len = %d\n",len);
 	int tot = 0;
 	int hdr_len = ETHER_HDR_SIZE + IP_BASE_HDR_SIZE + TCP_BASE_HDR_SIZE;
 	int max_data_len = ETH_FRAME_LEN - hdr_len;
+	// pthread_mutex_lock(&tsk->rcv_buf->lock);
+	// printf("write get lock\n");
 	while (len) {
-		int send_len = len > max_data_len ? max_data_len : len;
-		while(tsk->snd_wnd < send_len) {
-			sleep_on(tsk->wait_send);
-		}
-		tsk->snd_wnd -= send_len;
+		// int send_len = len > max_data_len ? max_data_len : len;
+		// while(tsk->snd_wnd < send_len) {
+		// 	sleep_on(tsk->wait_send);
+		// }
+		// tsk->snd_wnd -= send_len;
+		// tsk->snd_nxt += send_len;
+		//printf("len = %d, send_len = %d\n");
 		// printf("tsk->snd_una=%u\ttsk->snd_wnd=%u\ttsk->snd_nxt=%u\tlen=%d\n",tsk->snd_una,tsk->snd_wnd,tsk->snd_nxt,send_len);
- 		char *packet = malloc(hdr_len + send_len);
+ 		// printf("tsk->snd_wnd = %d\n",tsk->snd_wnd);
+		while(tsk->snd_wnd == 0) {
+			// pthread_mutex_unlock(&tsk->rcv_buf->lock);
+			// printf("go to sleep: unlock\n");
+			sleep_on(tsk->wait_send);
+			// pthread_mutex_lock(&tsk->rcv_buf->lock);
+			// printf("wake up: lock\n");
+		}
+		int send_len = min(min(max_data_len,len),tsk->snd_wnd);
+		char *packet = malloc(hdr_len + send_len);
 		memcpy(packet + hdr_len, buf, send_len);
-		// printf("send packet out: len = %d\n", send_len);
+
 		tcp_send_packet(tsk, packet, hdr_len + send_len);
+		tsk->snd_wnd -= send_len;
+		// pthread_mutex_unlock(&tsk->rcv_buf->lock);
+		// printf("go to sleep: unlock\n");
+		// sleep_on(tsk->wait_send);
+		// pthread_mutex_lock(&tsk->rcv_buf->lock);
+		// printf("wake up: lock\n");
+		
+		// tsk->snd_wnd -= send_len;
 		len -= send_len;
+		// printf("send packet out: len = %d, remaining len = %d\n", send_len,len);
 		buf += send_len;
 		tot += send_len;
 	}
+	// pthread_mutex_unlock(&tsk->rcv_buf->lock);
+	// printf("write unlock 1\n");
 	return tot;
 }

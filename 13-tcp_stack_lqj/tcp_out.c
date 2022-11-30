@@ -46,6 +46,7 @@ void tcp_send_packet(struct tcp_sock *tsk, char *packet, int len)
 	u32 ack = tsk->rcv_nxt;
 	u16 rwnd = tsk->rcv_wnd;
 
+	
 	tcp_init_hdr(tcp, sport, dport, seq, ack, TCP_PSH|TCP_ACK, rwnd);
 	ip_init_hdr(ip, saddr, daddr, ip_tot_len, IPPROTO_TCP); 
 
@@ -87,6 +88,7 @@ void tcp_send_control_packet(struct tcp_sock *tsk, u8 flags)
 		tsk->snd_nxt += 1;
 
 	ip_send_packet(packet, pkt_size);
+	// printf("send a control packet:%d\n",flags);
 }
 
 // send tcp reset packet

@@ -71,7 +71,7 @@ void handle_tcp_packet(char *packet, struct iphdr *ip, struct tcphdr *tcp)
 		log(ERROR, "received tcp packet with invalid checksum, drop it.");
 		return ;
 	}
-
+	// printf("receive packet\n");
 	struct tcp_cb cb;
 	tcp_cb_init(ip, tcp, &cb);
 

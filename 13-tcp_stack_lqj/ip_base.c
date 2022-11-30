@@ -51,4 +51,17 @@ rt_entry_t *longest_prefix_match(u32 dst)
 void ip_send_packet(char *packet, int len)
 {
 	//fprintf(stderr, "TODO: send ip packet.\n");
+
+	struct ether_header *eh = (struct ether_header*)packet;
+	struct iphdr *iph = (struct iphdr *) (packet+ETHER_HDR_SIZE);
+	iface_info_t *iface;
+	int flag = 0;
+	list_for_each_entry(iface, &instance->iface_list, list) {
+		if(iface->ip == ntohl(iph->saddr)) {
+			flag = 1;
+			break;
+		}
+	}
+	if (!flag){printf("ip send packet error\n"); return;}
+	iface_send_packet_by_arp(iface, ntohl(iph->daddr),packet,len);
 }

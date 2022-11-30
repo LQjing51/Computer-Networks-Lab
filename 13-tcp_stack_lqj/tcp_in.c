@@ -11,12 +11,16 @@
 // if the snd_wnd before updating is zero, notify tcp_sock_send (wait_send)
 static inline void tcp_update_window(struct tcp_sock *tsk, struct tcp_cb *cb)
 {
-	// u16 old_snd_wnd = tsk->snd_wnd;
-	// tsk->snd_wnd = cb->rwnd;
-	// if (old_snd_wnd == 0)
-	// 	wake_up(tsk->wait_send);
-	tsk->snd_wnd = cb->rwnd - (tsk->snd_nxt - tsk->snd_una);
+	//u16 old_snd_wnd = tsk->snd_wnd;
+	// pthread_mutex_lock(&tsk->rcv_buf->lock);
+	tsk->snd_wnd = cb->rwnd - (tsk->snd_nxt-tsk->snd_una);
+	// printf("update get lock, tsk->snd_wnd = %d\n", tsk->snd_wnd);
+	// pthread_mutex_unlock(&tsk->rcv_buf->lock);
+	// printf("update unlock\n");
+	//if (old_snd_wnd == 0)
 	wake_up(tsk->wait_send);
+	//tsk->snd_wnd = cb->rwnd - (tsk->snd_nxt - tsk->snd_una);
+	//wake_up(tsk->wait_send);
 }
 
 // update the snd_wnd safely: cb->ack should be between snd_una and snd_nxt
@@ -47,7 +51,7 @@ static inline int is_tcp_seq_valid(struct tcp_sock *tsk, struct tcp_cb *cb)
 // Process the incoming packet according to TCP state machine. 
 void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 {
-	fprintf(stdout, "TODO: implement %s please.\n", __FUNCTION__);
+	// fprintf(stdout, "TODO: implement %s please.\n", __FUNCTION__);
 	if(!is_tcp_seq_valid(tsk,cb)){
 		return;
 	}
@@ -70,9 +74,10 @@ void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 
 	if(tsk->state == TCP_LISTEN){
 		if(cb->flags & TCP_SYN){
+			// printf("LISTEN receive SYN\n");
 			struct tcp_sock *new_tsk = alloc_tcp_sock();
 			new_tsk->parent = tsk;
-			tcp_sock_listen_enqueue(new_tsk);
+			list_add_tail(&new_tsk->list, &new_tsk->parent->accept_queue);
 
 			new_tsk->sk_dip = cb->saddr;
 			new_tsk->sk_dport = cb->sport;
@@ -80,12 +85,13 @@ void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 			new_tsk->sk_sport = cb->dport;
 
 			new_tsk->rcv_nxt = cb->seq_end;
+			// new_tsk->snd_nxt = tcp_new_iss();
+			// new_tsk->snd_una = new_tsk->snd_nxt;
 	
+			tcp_set_state(new_tsk,TCP_SYN_RECV);
 			//do not hash to bind table as it using the same port as its parent
 			//hash to establish table as its quadruple has been decided
 			tcp_hash(new_tsk);
-	
-			tcp_set_state(new_tsk,TCP_SYN_RECV);
 			tcp_send_control_packet(new_tsk,TCP_SYN | TCP_ACK);
 		}
 	}else if(tsk->state == TCP_SYN_SENT){
@@ -151,7 +157,7 @@ void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 
 			write_ring_buffer(tsk->rcv_buf,cb->payload,cb->pl_len);
 			tsk->rcv_wnd = ring_buffer_free(tsk->rcv_buf);
-
+			// printf("send ask: rcv_wnd = %d\n",tsk->rcv_wnd);
 			pthread_mutex_unlock(&tsk->rcv_buf->lock);
 			
 			tcp_send_control_packet(tsk,TCP_ACK);
