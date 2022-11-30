@@ -36,6 +36,7 @@ def client(ip, port):
     for i in range(10):
         new_data = data[i:] + data[:i+1]
         s.send(new_data)
+        # print("finish send")
         print s.recv(1000)
         sleep(1)
     

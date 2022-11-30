@@ -52,7 +52,9 @@ static inline int is_tcp_seq_valid(struct tcp_sock *tsk, struct tcp_cb *cb)
 void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 {
 	// fprintf(stdout, "TODO: implement %s please.\n", __FUNCTION__);
-	if(!is_tcp_seq_valid(tsk,cb)){
+	// printf("in tcp_process\n");
+	if(tsk->state != TCP_LISTEN && tsk->state != TCP_SYN_RECV && tsk->state != TCP_SYN_SENT \
+	&& !is_tcp_seq_valid(tsk,cb)){
 		return;
 	}
 	if(cb->flags & TCP_RST){
@@ -151,7 +153,7 @@ void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 			// tcp_sock_close(tsk);
 		}
 	}
-
+	// printf("cb->pl_len = %d\n", cb->pl_len);
 	if(cb->pl_len>0){
 			pthread_mutex_lock(&tsk->rcv_buf->lock);
 
@@ -159,7 +161,7 @@ void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 			tsk->rcv_wnd = ring_buffer_free(tsk->rcv_buf);
 			// printf("send ask: rcv_wnd = %d\n",tsk->rcv_wnd);
 			pthread_mutex_unlock(&tsk->rcv_buf->lock);
-			
+
 			tcp_send_control_packet(tsk,TCP_ACK);
 			wake_up(tsk->wait_recv);
 	}

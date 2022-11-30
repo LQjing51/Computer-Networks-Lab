@@ -31,46 +31,47 @@ void *tcp_server(void *arg)
 	log(DEBUG, "accept a connection.");
 	
 	/* expr 2 */
-	// char rbuf[1001];
-	// char wbuf[1024];
-	// int rlen = 0;
-	// while (1) {
-	// 	rlen = tcp_sock_read(csk, rbuf, 1000);
-	// 	if (rlen == 0) {
-	// 		log(DEBUG, "tcp_sock_read return 0, finish transmission.");
-	// 		break;
-	// 	} 
-	// 	else if (rlen > 0) {
-	// 		rbuf[rlen] = '\0';
-	// 		sprintf(wbuf, "server echoes: %s", rbuf);
-	// 		if (tcp_sock_write(csk, wbuf, strlen(wbuf)) < 0) {
-	// 			log(DEBUG, "tcp_sock_write return negative value, something goes wrong.");
-	// 			exit(1);
-	// 		}
-	// 	}
-	// 	else {
-	// 		log(DEBUG, "tcp_sock_read return negative value, something goes wrong.");
-	// 		exit(1);
-	// 	}
-	// }
-
-	/* expr 3 */
-	FILE *f = fopen("server-output.dat", "w");
-
-	#define MAX_LEN 10000
-	char *buf = malloc(MAX_LEN);
-	int i, len;
-	while (!tcp_sock_read(csk, &len, 4)) ;
-
-	printf("server: will recv %d bytes.\n", len);
-
-	while (len) {
-		int ret = tcp_sock_read(csk, buf, min(MAX_LEN, len));
-		for (i = 0; i < ret; i++) fprintf(f, "%c", buf[i]);
-		len -= ret;
+	char rbuf[1001];
+	char wbuf[1024];
+	int rlen = 0;
+	while (1) {
+		rlen = tcp_sock_read(csk, rbuf, 1000);
+		printf("return from read\n");
+		if (rlen == 0) {
+			log(DEBUG, "tcp_sock_read return 0, finish transmission.");
+			break;
+		} 
+		else if (rlen > 0) {
+			rbuf[rlen] = '\0';
+			sprintf(wbuf, "server echoes: %s", rbuf);
+			if (tcp_sock_write(csk, wbuf, strlen(wbuf)) < 0) {
+				log(DEBUG, "tcp_sock_write return negative value, something goes wrong.");
+				exit(1);
+			}
+		}
+		else {
+			log(DEBUG, "tcp_sock_read return negative value, something goes wrong.");
+			exit(1);
+		}
 	}
 
-	fclose(f);
+	/* expr 3 */
+	// FILE *f = fopen("server-output.dat", "w");
+
+	// #define MAX_LEN 10000
+	// char *buf = malloc(MAX_LEN);
+	// int i, len;
+	// while (!tcp_sock_read(csk, &len, 4)) ;
+
+	// printf("server: will recv %d bytes.\n", len);
+
+	// while (len) {
+	// 	int ret = tcp_sock_read(csk, buf, min(MAX_LEN, len));
+	// 	for (i = 0; i < ret; i++) fprintf(f, "%c", buf[i]);
+	// 	len -= ret;
+	// }
+
+	// fclose(f);
 
 
 
@@ -96,54 +97,54 @@ void *tcp_client(void *arg)
 	}
 
 	/* expr 2 */
-	// char *wbuf = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-	// int wlen = strlen(wbuf);
-	// char rbuf[1001];
-	// int rlen = 0;
+	char *wbuf = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+	int wlen = strlen(wbuf);
+	char rbuf[1001];
+	int rlen = 0;
 
-	// int n = 10;
-	// for (int i = 0; i < n; i++) {
-	// 	if (tcp_sock_write(tsk, wbuf + i, wlen - n) < 0)
-	// 		break;
+	int n = 10;
+	for (int i = 0; i < n; i++) {
+		if (tcp_sock_write(tsk, wbuf + i, wlen - n) < 0)
+			break;
 
-	// 	rlen = tcp_sock_read(tsk, rbuf, 1000);
-	// 	if (rlen == 0) {
-	// 		log(DEBUG, "tcp_sock_read return 0, finish transmission.");
-	// 		break;
-	// 	}
-	// 	else if (rlen > 0) {
-	// 		rbuf[rlen] = '\0';
-	// 		fprintf(stdout, "%s\n", rbuf);
-	// 		//log(DEBUG, "%s\n", rbuf);
-	// 	}
-	// 	else {
-	// 		log(DEBUG, "tcp_sock_read return negative value, something goes wrong.");
-	// 		exit(1);
-	// 	}
-	// 	sleep(1);
-	// }
+		rlen = tcp_sock_read(tsk, rbuf, 1000);
+		if (rlen == 0) {
+			log(DEBUG, "tcp_sock_read return 0, finish transmission.");
+			break;
+		}
+		else if (rlen > 0) {
+			rbuf[rlen] = '\0';
+			fprintf(stdout, "%s\n", rbuf);
+			//log(DEBUG, "%s\n", rbuf);
+		}
+		else {
+			log(DEBUG, "tcp_sock_read return negative value, something goes wrong.");
+			exit(1);
+		}
+		sleep(1);
+	}
 
 
 	/* expr 3 */
-	FILE *f = fopen("client-input.dat", "r");
-	fseek(f, 0, SEEK_END);
-	int len = ftell(f);
-	fseek(f, 0, SEEK_SET);
+	// FILE *f = fopen("client-input.dat", "r");
+	// fseek(f, 0, SEEK_END);
+	// int len = ftell(f);
+	// fseek(f, 0, SEEK_SET);
 
-	printf("client: will send %d bytes.\n", len);
+	// printf("client: will send %d bytes.\n", len);
 
-	char *buf = malloc(len);
-	int i = 0;
-	char c;
-	while (fscanf(f,"%c",&c) != EOF) {
-		buf[i++] = c;
-		// if (!(i%100)) printf("%d\n",i);
-	}
-	// printf("begin send data\n");
-	tcp_sock_write(tsk, &len, 4);	//send length first
-	tcp_sock_write(tsk, buf, len);
-	printf("client finish write\n");
-	fclose(f);
+	// char *buf = malloc(len);
+	// int i = 0;
+	// char c;
+	// while (fscanf(f,"%c",&c) != EOF) {
+	// 	buf[i++] = c;
+	// 	// if (!(i%100)) printf("%d\n",i);
+	// }
+	// // printf("begin send data\n");
+	// tcp_sock_write(tsk, &len, 4);	//send length first
+	// tcp_sock_write(tsk, buf, len);
+	// printf("client finish write\n");
+	// fclose(f);
 
 	sleep(1);
 
