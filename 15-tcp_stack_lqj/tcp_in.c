@@ -11,6 +11,7 @@ static inline void tcp_check_send_buf(struct tcp_sock *tsk, struct tcp_cb *cb) {
 	pthread_mutex_lock(&timer_lock);
 	struct retrans_packet *pkt, *next_pkt;
 	list_for_each_entry_safe(pkt, next_pkt, &tsk->send_buf, list) {
+		// printf("check send buf: seq_end = %u, snd_una = %u\n",pkt->seq_end,tsk->snd_una);
 		if (pkt->seq_end <= tsk->snd_una) {
 			list_delete_entry(&pkt->list);
 			tcp_set_retrans_timer(tsk);
@@ -25,7 +26,7 @@ static inline void tcp_check_send_buf(struct tcp_sock *tsk, struct tcp_cb *cb) {
 }
 
 static inline void insert_ofo_packet(struct ofo_packet *pkt, struct tcp_sock *tsk) {
-	list_head *head = &tsk->rcv_ofo_buf;
+	struct list_head *head = &tsk->rcv_ofo_buf;
 	if (list_empty(head)) {
 		list_add_head(&pkt->list, head);
 		return;
@@ -36,28 +37,27 @@ static inline void insert_ofo_packet(struct ofo_packet *pkt, struct tcp_sock *ts
 		list_add_head(&pkt->list, head);
 		return;
 	}
-	if (pkt->seq > lst->seq) {
+	if (pkt->seq > last->seq) {
 		list_add_tail(&pkt->list, head);
 		return;
 	}
 	struct ofo_packet *cur_pkt;
 	list_for_each_entry(cur_pkt, head, list) {
-		if (pkt->seq > cur_pkt) {
-			list_insert(&pkt->list, &cur_pkt->list, cur_pkt->list.next);
+		if (pkt->seq == cur_pkt->seq) return;
+		if (pkt->seq < cur_pkt->seq) {
+			list_insert(&pkt->list, cur_pkt->list.prev, &cur_pkt->list);
 			break;
 		}
 	}
 }
 
 static inline void handle_payload(struct tcp_sock *tsk, struct tcp_cb *cb) {
-	if (tsk->rcv_nxt == cb->seq) {
-		write_ring_buffer(tsk->rcv_buf,cb->payload,cb->pl_len);
-		tsk->rcv_wnd = ring_buffer_free(tsk->rcv_buf);
-		tsk->rcv_nxt = cb->seq_end;
-		return;
-	}
-	struct ofo_packet *pkt = (struct ofo_packet *) malloc(struct ofo_packet);
-	pkt->payload = cb->payload;
+
+	if (cb->seq_end <= tsk->rcv_nxt) return;
+	// printf("handle payload: cb->seq = %u\n", cb->seq);
+	struct ofo_packet *pkt = (struct ofo_packet *) malloc(sizeof(struct ofo_packet));
+	pkt->payload = (char*)malloc(cb->pl_len);
+	memcpy(pkt->payload, cb->payload, cb->pl_len);
 	pkt->pl_len = cb->pl_len;
 	pkt->seq = cb->seq;
 	pkt->seq_end = cb->seq_end;
@@ -68,13 +68,17 @@ static inline void handle_payload(struct tcp_sock *tsk, struct tcp_cb *cb) {
 	pthread_mutex_lock(&tsk->rcv_buf->lock);
 	struct ofo_packet *nxt_pkt;
 	list_for_each_entry_safe(pkt, nxt_pkt, &tsk->rcv_ofo_buf, list) {
+		// printf("handle_payload: pkt->seq = %u\n", pkt->seq);
 		if (pkt->seq == tsk->rcv_nxt && ring_buffer_free(tsk->rcv_buf) >= pkt->pl_len) {
 			write_ring_buffer(tsk->rcv_buf, pkt->payload, pkt->pl_len);
 			tsk->rcv_wnd = ring_buffer_free(tsk->rcv_buf);
 			tsk->rcv_nxt = pkt->seq_end;
+			// printf("handle_payload: current->rcv_nxt = %u\n", tsk->rcv_nxt);
+			list_delete_entry(&pkt->list);
 		} else break;
 	}
 	pthread_mutex_unlock(&tsk->rcv_buf->lock);
+	// printf("handle_payload: rcv_nxt = %u\n", tsk->rcv_nxt);
 }
 
 // update the snd_wnd of tcp_sock
@@ -106,7 +110,7 @@ static inline int is_tcp_seq_valid(struct tcp_sock *tsk, struct tcp_cb *cb)
 		return 1;
 	}
 	else {
-		log(ERROR, "received packet with invalid seq, drop it.");
+		log(ERROR, "received packet with invalid seq, cb->seq=%u, tsk->rcv_nxt=%u, tsk->rcv_wnd=%u\n", cb->seq,tsk->rcv_nxt,tsk->rcv_wnd);
 		return 0;
 	}
 }
@@ -115,7 +119,7 @@ static inline int is_tcp_seq_valid(struct tcp_sock *tsk, struct tcp_cb *cb)
 void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 {
 	// fprintf(stdout, "TODO: implement %s please.\n", __FUNCTION__);
-	// printf("in tcp_process\n");
+	// printf("receive a packet, in tcp_process\n");
 	if(tsk->state != TCP_LISTEN && tsk->state != TCP_SYN_RECV && tsk->state != TCP_SYN_SENT \
 	&& !is_tcp_seq_valid(tsk,cb)){
 		return;
@@ -133,7 +137,9 @@ void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 		if(cb->flags & TCP_ACK){
 			tsk->snd_una = cb->ack;
 			tcp_update_window_safe(tsk,cb);
-			tcp_check_send_buffer(tsk, cb);
+			// printf("before check send buf\n");
+			tcp_check_send_buf(tsk, cb);
+			// printf("finish check send buf\n");
 		}
 	}
 

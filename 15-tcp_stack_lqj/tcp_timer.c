@@ -19,8 +19,9 @@ void tcp_scan_timer_list()
 			timer->elapse += TCP_TIMER_SCAN_INTERVAL;
 			if (timer->elapse >= timer->timeout) {
 				if (timer->type == 1) {
-					struct tcp_sock *tsk = list_entry(timer, struct tcp_sock, timewait);
+					struct tcp_sock *tsk = list_entry(timer, struct tcp_sock, retrans_timer);
 					if (++timer->retries == 3) {
+						printf("retries = 3\n");
 						// close socket
 						tcp_send_control_packet(tsk, TCP_RST);
 						tcp_unhash(tsk);
@@ -34,7 +35,9 @@ void tcp_scan_timer_list()
 						// retransmit packets
 						struct retrans_packet *pkt;
 						list_for_each_entry(pkt, &tsk->send_buf, list) {
-							ip_send_packet(pkt->packet, pkt->length);
+							char* buf = malloc(pkt->length);
+							memcpy(buf, pkt->packet, pkt->length);
+							ip_send_packet(buf, pkt->length);
 						}
 					}
 				} else {
@@ -75,15 +78,18 @@ void tcp_set_retrans_timer(struct tcp_sock *tsk) {
 }
 
 void tcp_unset_retrans_timer(struct tcp_sock *tsk) {
-	tsk->retrans_timer.enable = 0;
-	list_delete_entry(&tsk->retrans_timer.list);
+	// printf("enable = %d\n", tsk->retrans_timer.enable);
+	if (tsk->retrans_timer.enable == 1) {
+		tsk->retrans_timer.enable = 0;
+		list_delete_entry(&tsk->retrans_timer.list);
+	}
 }
 
 // scan the timer_list periodically by calling tcp_scan_timer_list
 void *tcp_timer_thread(void *arg)
 {
 	init_list_head(&timer_list);
-	pthread_mutex_init(&timer_lock);
+	pthread_mutex_init(&timer_lock, NULL);
 	while (1) {
 		usleep(TCP_TIMER_SCAN_INTERVAL);
 		tcp_scan_timer_list();

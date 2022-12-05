@@ -60,7 +60,7 @@ void tcp_send_packet(struct tcp_sock *tsk, char *packet, int len)
 	char *buf = malloc(len);
 	memcpy(buf, packet, len);
 
-	struct retrans_packet *new_packet = (struct retrans_packet *) malloc(struct retrans_packet);
+	struct retrans_packet *new_packet = (struct retrans_packet *) malloc(sizeof(struct retrans_packet));
 	new_packet->length = len;
 	new_packet->packet = buf;
 	new_packet->seq = seq;

@@ -113,7 +113,7 @@ struct tcp_sock {
 };
 
 struct retrans_packet {
-	list_head list;
+	struct list_head list;
 	char *packet;
 	int length;
 	u32 seq;
@@ -121,12 +121,12 @@ struct retrans_packet {
 };
 
 struct ofo_packet {
-	list_head list;
+	struct list_head list;
 	char *payload;
 	int pl_len;
 	u32 seq;
 	u32 seq_end;
-}
+};
 
 void tcp_set_state(struct tcp_sock *tsk, int state);
 

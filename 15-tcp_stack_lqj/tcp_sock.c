@@ -57,6 +57,8 @@ struct tcp_sock *alloc_tcp_sock()
 	init_list_head(&tsk->accept_queue);
 	init_list_head(&tsk->hash_list);
 	init_list_head(&tsk->bind_hash_list);
+	init_list_head(&tsk->send_buf);
+	init_list_head(&tsk->rcv_ofo_buf);
 
 	tsk->rcv_buf = alloc_ring_buffer(tsk->rcv_wnd);
 
@@ -282,10 +284,6 @@ int tcp_sock_connect(struct tcp_sock *tsk, struct sock_addr *skaddr)
 	//hash to establish table as its quadruple has been decided
 	tcp_hash(tsk);
 
-	log(DEBUG, IP_FMT":%hu, "IP_FMT":%hu", \
-			HOST_IP_FMT_STR(tsk->sk_sip), tsk->sk_sport, \
-			HOST_IP_FMT_STR(tsk->sk_dip), tsk->sk_dport);
-
 	// wait
 	int ret = sleep_on(tsk->wait_connect);
 
@@ -377,8 +375,9 @@ int tcp_sock_read(struct tcp_sock *tsk, char *buf, int len) {
 	}
 	tsk->rcv_wnd = ring_buffer_free(tsk->rcv_buf);
 	tcp_send_control_packet(tsk, TCP_ACK);
+	int read_len = read_ring_buffer(tsk->rcv_buf, buf, len); 
 	pthread_mutex_unlock(&tsk->rcv_buf->lock);
-	return read_ring_buffer(tsk->rcv_buf, buf, len);
+	return read_len;
 }
 
 int tcp_sock_write(struct tcp_sock *tsk, char *buf, int len) {
