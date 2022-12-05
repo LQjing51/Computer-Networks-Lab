@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "tcp_timer.h": "c",
+        "tcp.h": "c",
+        "tcp_sock.h": "c"
+    }
+}
