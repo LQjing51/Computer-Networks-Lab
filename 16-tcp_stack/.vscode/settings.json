@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "arpcache.h": "c",
+        "tcp_sock.h": "c",
+        "memory": "c",
+        "mutex": "c",
+        "shared_mutex": "c",
+        "list": "c"
+    }
+}
