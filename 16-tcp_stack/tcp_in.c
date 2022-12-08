@@ -222,6 +222,7 @@ void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 			}
 		} else if (tsk->con_state == TCP_DISORDER) {
 			if (cb->ack == tsk->snd_nxt) {
+				tsk->dupacks = 0;
 				tcp_set_con_state(tsk, TCP_OPEN);
 			} else if (cb->ack == tsk->snd_una && ++tsk->dupacks >= 3) {
 				// retransmit first unacked packet
@@ -236,10 +237,15 @@ void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 		} else if (tsk->con_state == TCP_RECOVERY) {
 			if (cb->ack >= tsk->recovery_point) {
 				// full ack, back to OPEN
+				tsk->dupacks = 0;
 				clear_send_buff(tsk);
 				tcp_set_con_state(tsk, TCP_OPEN);
 			} else if (cb->ack > tsk->snd_una) {
 				// partial ack
+				tsk->dupacks = 0;
+				// retransmit
+				tsk->snd_una = cb->ack;
+				tcp_update_send_buf(tsk);
 				retrans_first_packet(tsk);
 			} else if (cb->ack == tsk->snd_una) {
 				// no ack
@@ -247,6 +253,7 @@ void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 			}
 		} else if (tsk->con_state == TCP_LOSS) {
 			if (cb->ack > tsk->snd_una) {
+				tsk->dupacks = 0;
 				tcp_set_con_state(tsk, TCP_OPEN);
 			}
 		}
