@@ -91,7 +91,7 @@ static inline u16 tcp_checksum(struct iphdr *ip, struct tcphdr *tcp)
 
 	return cksum;
 }
-
+extern const char *tcp_con_state_str[];
 extern const char *tcp_state_str[];
 static inline const char *tcp_state_to_str(int state)
 {

@@ -13,10 +13,10 @@
 
 static inline void tcp_update_rcv_buffer(struct tcp_sock *tsk, struct tcp_cb *cb) {
 	pthread_mutex_lock(&tsk->rcv_buf_lock);
-	if (cb->seq == tsk->rcv_nxt) {
-		write_ring_buffer(tsk->rcv_buf, cb->payload, cb->pl_len);
-		tsk->rcv_nxt = cb->seq_end;
-	} else {
+	// if (cb->seq == tsk->rcv_nxt) {
+	// 	write_ring_buffer(tsk->rcv_buf, cb->payload, cb->pl_len);
+	// 	tsk->rcv_nxt = cb->seq_end;
+	// } else {
 		char *data = malloc(cb->pl_len);
 		memcpy(data, cb->payload, cb->pl_len);
 		struct tcp_ofo_data *ofo_data = malloc(sizeof(struct tcp_ofo_data));
@@ -36,8 +36,9 @@ static inline void tcp_update_rcv_buffer(struct tcp_sock *tsk, struct tcp_cb *cb
 				list_for_each_entry_safe(ptr, ptr_, &tsk->rcv_ofo_buf, list) {
 					if (ofo_data->seq == ptr->seq) {
 						// packet has received
-						pthread_mutex_unlock(&tsk->rcv_buf_lock);
-						return;
+						// pthread_mutex_unlock(&tsk->rcv_buf_lock);
+						// return;
+						goto CHECK_OFO;
 					}
 					if (ofo_data->seq < ptr->seq) {
 						list_insert(&ofo_data->list, &lst->list, &ptr->list);
@@ -49,12 +50,16 @@ static inline void tcp_update_rcv_buffer(struct tcp_sock *tsk, struct tcp_cb *cb
 				if (!flag) list_add_tail(&ofo_data->list, &tsk->rcv_ofo_buf);
 			}
 		}
-	}
+	// }
+CHECK_OFO:
 	if (!list_empty(&tsk->rcv_ofo_buf)) {
 		// check continuous data
 		struct tcp_ofo_data *ptr, *ptr_;
 		list_for_each_entry_safe(ptr, ptr_, &tsk->rcv_ofo_buf, list) {
-			if (ptr->seq != tsk->rcv_nxt || ring_buffer_free(tsk->rcv_buf) < ptr->len) break;
+			if (ptr->seq != tsk->rcv_nxt || ring_buffer_free(tsk->rcv_buf) < ptr->len) {
+				printf("\nrcv_nxt = %u, ptr->seq = %u\n", tsk->rcv_nxt, ptr->seq);
+				break;
+			}
 			write_ring_buffer(tsk->rcv_buf, ptr->data, ptr->len);
 			tsk->rcv_nxt += ptr->len;
 			list_delete_entry(&ptr->list);
@@ -62,7 +67,7 @@ static inline void tcp_update_rcv_buffer(struct tcp_sock *tsk, struct tcp_cb *cb
 		}
 	}
 
-	tsk->rcv_wnd = ring_buffer_free(tsk->rcv_buf);
+	tsk->rcv_wnd = ring_buffer_free(tsk->rcv_buf);//min(ring_buffer_free(tsk->rcv_buf) + MSS, TCP_DEFAULT_WINDOW);
 	pthread_mutex_unlock(&tsk->rcv_buf_lock);
 }
 
@@ -107,7 +112,8 @@ static inline void tcp_update_window(struct tcp_sock *tsk, struct tcp_cb *cb)
 {
 	tsk->snd_wnd = min(tsk->adv_wnd, tsk->cwnd * MSS);
 	int in_flight = (int) (tsk->snd_nxt - tsk->snd_una) / MSS - tsk->dupacks;
-	tsk->allow_snd = tsk->snd_wnd / MSS - in_flight;
+	tsk->allow_snd = tsk->snd_wnd / MSS - max(in_flight,0);
+	printf("adv_wnd = %d, snd_wnd = %d, in_flight = %d, allow_snd: %d\n",tsk->adv_wnd, tsk->snd_wnd, in_flight, tsk->allow_snd);
 	wake_up(tsk->wait_send);
 }
 
@@ -133,6 +139,7 @@ static inline void retrans_first_packet(struct tcp_sock *tsk) {
 	memcpy(new_packet, cpkt->packet, cpkt->len);
 	ip_send_packet(new_packet, cpkt->len);
 	pthread_mutex_unlock(&tsk->send_buf_lock);
+	printf("RETRANS: %u\n", cpkt->end);
 }
 
 // check whether the sequence number of the incoming packet is in the receiving
@@ -140,11 +147,11 @@ static inline void retrans_first_packet(struct tcp_sock *tsk) {
 static inline int is_tcp_seq_valid(struct tcp_sock *tsk, struct tcp_cb *cb)
 {
 	u32 rcv_end = tsk->rcv_nxt + max(tsk->rcv_wnd, 1);
-	if (less_than_32b(cb->seq, rcv_end) && less_or_equal_32b(tsk->rcv_nxt, cb->seq_end)) {
+	if (less_than_32b(cb->seq, rcv_end) && less_than_32b(tsk->rcv_nxt, cb->seq_end)) {
 		return 1;
 	}
 	else {
-		log(ERROR, "received packet with invalid seq, drop it, seq = %u, seq_end = %u, rcv_nxt = %u, rcv_end = %u", cb->seq, cb->seq_end, tsk->rcv_nxt, rcv_end);
+		// log(ERROR, "received packet with invalid seq, drop it, seq = %u, seq_end = %u, rcv_nxt = %u, rcv_end = %u", cb->seq, cb->seq_end, tsk->rcv_nxt, rcv_end);
 		return 0;
 	}
 }
@@ -204,6 +211,7 @@ void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 	
 	// handle ACK
 	if(cb->flags & TCP_ACK){
+		printf("cb->ack = %u, snd_una = %u\n", cb->ack, tsk->snd_una);
 		if (cb->ack > tsk->snd_una) {
 			// acked new data, update cwnd
 			if (!tsk->ssthresh || tsk->cwnd < tsk->ssthresh) {
@@ -238,7 +246,7 @@ void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 			if (cb->ack >= tsk->recovery_point) {
 				// full ack, back to OPEN
 				tsk->dupacks = 0;
-				clear_send_buff(tsk);
+				// tcp_clear_send_buf(tsk);
 				tcp_set_con_state(tsk, TCP_OPEN);
 			} else if (cb->ack > tsk->snd_una) {
 				// partial ack
@@ -252,6 +260,7 @@ void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 				tsk->dupacks++;
 			}
 		} else if (tsk->con_state == TCP_LOSS) {
+			// while(1);
 			if (cb->ack > tsk->snd_una) {
 				tsk->dupacks = 0;
 				tcp_set_con_state(tsk, TCP_OPEN);
@@ -351,6 +360,7 @@ void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 
 		// send ACK
 		tcp_send_control_packet(tsk, TCP_ACK);
+		printf("******send ACK = %u******\n", tsk->rcv_nxt);
 
 		// wake up wait_recv
 		wake_up(tsk->wait_recv);

@@ -10,9 +10,12 @@ static struct list_head timer_list;
 
 static pthread_mutex_t timer_lock;
 
+static FILE* fp;
+
 // scan the timer_list, find the tcp sock which stays for at 2*MSL, release it
 void tcp_scan_timer_list()
 {
+	// return;
 	pthread_mutex_lock(&timer_lock);
 	struct tcp_timer *timer, *timer_;
 	list_for_each_entry_safe(timer, timer_, &timer_list, list) {
@@ -21,10 +24,16 @@ void tcp_scan_timer_list()
 			if (timer->type == 0) {
 				// time-wait
 				struct tcp_sock *tsk = list_entry(timer, struct tcp_sock, timewait);
-				tcp_unhash(tsk);
-				tcp_bind_unhash(tsk);
-				tcp_set_state(tsk, TCP_CLOSED);
-				list_delete_entry(&timer->list);
+				if(tsk->flag == 1) {
+					fprintf(fp, "%3d\n", tsk->cwnd);
+					fflush(fp);
+					timer->timeout = 10000;
+				}else {
+					tcp_unhash(tsk);
+					tcp_bind_unhash(tsk);
+					tcp_set_state(tsk, TCP_CLOSED);
+					list_delete_entry(&timer->list);
+				}
 			} else {
 				struct tcp_sock *tsk = list_entry(timer, struct tcp_sock, retrans_timer);
 				if (++tsk->send_retries == SEND_MAX_RETRY) {
@@ -63,9 +72,10 @@ void tcp_scan_timer_list()
 // set the timewait timer of a tcp sock, by adding the timer into timer_list
 void tcp_set_timewait_timer(struct tcp_sock *tsk)
 {
+	if (tsk->flag == 1) fp = fopen("cwnd.txt", "w");
 	tsk->timewait.enable = 1;
 	tsk->timewait.type = 0;
-	tsk->timewait.timeout = TCP_TIMEWAIT_TIMEOUT;
+	tsk->timewait.timeout = tsk->flag ? 10000 : TCP_TIMEWAIT_TIMEOUT;
 
 	pthread_mutex_lock(&timer_lock);
 	list_add_head(&tsk->timewait.list, &timer_list);

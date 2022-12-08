@@ -127,6 +127,8 @@ struct tcp_sock {
 
 	// slow start threshold
 	u32 ssthresh;
+
+	int flag;
 };
 
 struct tcp_cached_pkt {

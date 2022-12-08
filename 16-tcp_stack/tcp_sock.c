@@ -29,7 +29,7 @@ inline void tcp_set_con_state(struct tcp_sock *tsk, int state)
 {
 	log(DEBUG, IP_FMT":%hu switch congestion state, from %s to %s.", \
 			HOST_IP_FMT_STR(tsk->sk_sip), tsk->sk_sport, \
-			tcp_con_state_str[tsk->state], tcp_con_state_str[state]);
+			tcp_con_state_str[tsk->con_state], tcp_con_state_str[state]);
 	tsk->con_state = state;
 }
 
@@ -282,6 +282,9 @@ int tcp_sock_connect(struct tcp_sock *tsk, struct sock_addr *skaddr)
 	// wait
 	int ret = sleep_on(tsk->wait_connect);
 
+	tsk->flag = 1;
+	tcp_set_timewait_timer(tsk);
+
 	return ret;
 }
 
@@ -363,19 +366,21 @@ int tcp_sock_read(struct tcp_sock *tsk, char *buf, int len) {
 		pthread_mutex_lock(&tsk->rcv_buf_lock);
 	}
 	int ret = read_ring_buffer(tsk->rcv_buf, buf, len);
-	tsk->rcv_wnd = ring_buffer_free(tsk->rcv_buf);
-	tcp_send_control_packet(tsk, TCP_ACK);
+	// tsk->rcv_wnd = ring_buffer_free(tsk->rcv_buf);
+	// tcp_send_control_packet(tsk, TCP_ACK);
 	pthread_mutex_unlock(&tsk->rcv_buf_lock);
 	return ret;
 }
 
 int tcp_sock_write(struct tcp_sock *tsk, char *buf, int len) {
 	int tot = 0;
+	int hdr_len = ETHER_HDR_SIZE + IP_BASE_HDR_SIZE + TCP_BASE_HDR_SIZE;
 	while (len) {
 		int send_len = len > MSS ? MSS : len;
 		while (tsk->allow_snd <= 0) {
 			sleep_on(tsk->wait_send);
 		}
+		tsk->allow_snd--;
  		char *packet = malloc(hdr_len + send_len);
 		memcpy(packet + hdr_len, buf, send_len);
 		tcp_send_packet(tsk, packet, hdr_len + send_len);

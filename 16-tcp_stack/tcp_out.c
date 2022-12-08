@@ -64,7 +64,7 @@ void tcp_send_packet(struct tcp_sock *tsk, char *packet, int len)
 		cpkt->end = tsk->snd_nxt;
 
 		pthread_mutex_lock(&tsk->send_buf_lock);
-		list_add_head(&cpkt->list, &tsk->send_buf);
+		list_add_tail(&cpkt->list, &tsk->send_buf);
 		pthread_mutex_unlock(&tsk->send_buf_lock);
 
 		tcp_set_retrans_timer(tsk);
