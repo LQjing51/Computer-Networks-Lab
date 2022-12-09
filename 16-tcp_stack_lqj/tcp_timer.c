@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 static struct list_head timer_list;
+static FILE* fp;
 
 pthread_mutex_t timer_lock;
 
@@ -46,10 +47,16 @@ void tcp_scan_timer_list()
 					}
 				} else {
 					struct tcp_sock *tsk = list_entry(timer, struct tcp_sock, timewait);
-					tcp_unhash(tsk);
-					tcp_bind_unhash(tsk);
-					tcp_set_state(tsk, TCP_CLOSED);
-					list_delete_entry(&timer->list);
+					if (tsk->flag){
+						fprintf(fp,"%2d\n",(int)tsk->cwnd);
+						fflush(fp);
+						timer->elapse = 0;
+					}else {
+						tcp_unhash(tsk);
+						tcp_bind_unhash(tsk);
+						tcp_set_state(tsk, TCP_CLOSED);
+						list_delete_entry(&timer->list);
+					}
 				}
 			}
 		}
@@ -60,7 +67,8 @@ void tcp_scan_timer_list()
 void tcp_set_timewait_timer(struct tcp_sock *tsk)
 {
 	tsk->timewait.type = 0;
-	tsk->timewait.timeout = TCP_TIMEWAIT_TIMEOUT;
+	tsk->timewait.timeout = tsk->flag ? 10000 : TCP_TIMEWAIT_TIMEOUT;
+	if (tsk->flag) fp = fopen("cwnd.txt", "w");
 	tsk->timewait.elapse = 0;
 	tsk->timewait.enable = 1;
 	list_add_head(&tsk->timewait.list, &timer_list);

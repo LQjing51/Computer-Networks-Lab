@@ -47,7 +47,7 @@ void tcp_send_packet(struct tcp_sock *tsk, char *packet, int len)
 	u16 rwnd = tsk->rcv_wnd;
 
 	
-	tcp_init_hdr(tcp, sport, dport, seq, ack, TCP_PSH|TCP_ACK, rwnd);
+	tcp_init_hdr(tcp, sport, dport, seq, ack, TCP_PSH/*|TCP_ACK*/, rwnd);
 	ip_init_hdr(ip, saddr, daddr, ip_tot_len, IPPROTO_TCP); 
 
 	tcp->checksum = tcp_checksum(ip, tcp);
@@ -99,6 +99,7 @@ void tcp_send_control_packet(struct tcp_sock *tsk, u8 flags)
 
 	tcp->checksum = tcp_checksum(ip, tcp);
 
+	// printf("\nsend control pkt: snd_nxt = %u\n\n", tsk->snd_nxt);
 	if (flags & (TCP_SYN|TCP_FIN))
 		tsk->snd_nxt += 1;
 

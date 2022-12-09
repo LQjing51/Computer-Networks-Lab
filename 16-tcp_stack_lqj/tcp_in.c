@@ -6,7 +6,7 @@
 #include "ring_buffer.h"
 
 #include <stdlib.h>
-
+#define max(a,b) ((a) > (b) ? (a) : (b))
 static inline void tcp_check_send_buf(struct tcp_sock *tsk, struct tcp_cb *cb) {
 	pthread_mutex_lock(&timer_lock);
 	struct retrans_packet *pkt, *next_pkt;
@@ -39,6 +39,7 @@ static inline void tcp_retrans_packet(struct tcp_sock *tsk) {
 }
 
 static inline void insert_ofo_packet(struct ofo_packet *pkt, struct tcp_sock *tsk) {
+	if (pkt->seq_end == tsk->rcv_nxt) return;
 	struct list_head *head = &tsk->rcv_ofo_buf;
 	if (list_empty(head)) {
 		list_add_head(&pkt->list, head);
@@ -59,7 +60,7 @@ static inline void insert_ofo_packet(struct ofo_packet *pkt, struct tcp_sock *ts
 		if (pkt->seq == cur_pkt->seq) return;
 		if (pkt->seq < cur_pkt->seq) {
 			list_insert(&pkt->list, cur_pkt->list.prev, &cur_pkt->list);
-			rcv_ofo_buf_size += pkt->pl_len;
+			tsk->rcv_ofo_buf_size += pkt->pl_len;
 			break;
 		}
 	}
@@ -83,13 +84,13 @@ static inline void handle_payload(struct tcp_sock *tsk, struct tcp_cb *cb) {
 		// printf("handle_payload: pkt->seq = %u\n", pkt->seq);
 		if (pkt->seq == tsk->rcv_nxt && ring_buffer_free(tsk->rcv_buf) >= pkt->pl_len) {
 			write_ring_buffer(tsk->rcv_buf, pkt->payload, pkt->pl_len);
-			rcv_ofo_buf_size -= pkt->pl_len;
+			tsk->rcv_ofo_buf_size -= pkt->pl_len;
 			tsk->rcv_nxt = pkt->seq_end;
 			// printf("handle_payload: current->rcv_nxt = %u\n", tsk->rcv_nxt);
 			list_delete_entry(&pkt->list);
 		} else break;
 	}
-	tsk->rcv_wnd = max(ring_buffer_free(tsk->rcv_buf) - rcv_ofo_buf_size, 0);
+	tsk->rcv_wnd = max(ring_buffer_free(tsk->rcv_buf) - tsk->rcv_ofo_buf_size, 0);
 	pthread_mutex_unlock(&tsk->rcv_buf->lock);
 	// printf("handle_payload: rcv_nxt = %u\n", tsk->rcv_nxt);
 }
@@ -100,11 +101,14 @@ static inline void handle_payload(struct tcp_sock *tsk, struct tcp_cb *cb) {
 static inline void tcp_update_window(struct tcp_sock *tsk, struct tcp_cb *cb)
 {
 	tsk->snd_wnd = min(max(tsk->adv_wnd, MSS), (int) (tsk->cwnd * MSS));
-	u32 num_inflight = max(tsk->snd_nxt - tsk->snd_una - tsk->num_dupack, 0);
+	int tmp_inflight = (((int)(tsk->snd_nxt - tsk->snd_una) / MSS) - tsk->num_dupack);
+	int num_inflight = tmp_inflight > 0 ? tmp_inflight: 0;
 	if (tsk->snd_wnd / MSS > num_inflight)
 		tsk->snd_max = tsk->snd_wnd / MSS - num_inflight;
 	else
 		tsk->snd_max = 0;
+	printf("UPDATE: snd_wnd = %d,dupackt = %d, tmp_inflight = %d, inflight = %d, snd_max = %d\n", \
+	tsk->snd_wnd, tsk->num_dupack, tmp_inflight, num_inflight, tsk->snd_max);
 	wake_up(tsk->wait_send);
 }
 
@@ -114,17 +118,12 @@ static inline void tcp_update_window_safe(struct tcp_sock *tsk, struct tcp_cb *c
 	if (less_or_equal_32b(tsk->snd_una, cb->ack) && less_or_equal_32b(cb->ack, tsk->snd_nxt))
 		tcp_update_window(tsk, cb);
 }
-
-#ifndef max
-#	define max(x,y) ((x)>(y) ? (x) : (y))
-#endif
-
 // check whether the sequence number of the incoming packet is in the receiving
 // window
 static inline int is_tcp_seq_valid(struct tcp_sock *tsk, struct tcp_cb *cb)
 {
 	u32 rcv_end = tsk->rcv_nxt + max(tsk->rcv_wnd, 1);
-	if (less_than_32b(cb->seq, rcv_end) && less_than_32b(tsk->rcv_nxt, cb->seq_end)) {
+	if (less_than_32b(cb->seq, rcv_end) && less_or_equal_32b(tsk->rcv_nxt, cb->seq_end)) {
 		return 1;
 	}
 	else {
@@ -143,7 +142,7 @@ static void tcp_reno_state_transfer(struct tcp_sock *tsk, struct tcp_cb *cb) {
 		}
 	}
 	// state transfer
-	switch (tsk->state) {
+	switch (tsk->reno_state) {
 		case TCP_OPEN:
 			if (cb->ack == tsk->snd_una) {
 				tsk->num_dupack = 1;
@@ -153,7 +152,7 @@ static void tcp_reno_state_transfer(struct tcp_sock *tsk, struct tcp_cb *cb) {
 		case TCP_DISORDER:
 			if (cb->ack == tsk->snd_una) {
 				tsk->num_dupack++;
-				if (tsk->num_dupack == 3) {
+				if (tsk->num_dupack == 5) {
 					tcp_set_reno_state(tsk, TCP_RECOVERY);
 					tsk->recovery_point = tsk->snd_nxt;
 					tcp_retrans_packet(tsk);
@@ -295,6 +294,8 @@ void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 	if(cb->pl_len > 0){
 		handle_payload(tsk, cb);
 		tcp_send_control_packet(tsk, TCP_ACK);
+		printf("send ACK: rcv_nxt = %u, rcv_wnd = %d\n", tsk->rcv_nxt, tsk->rcv_wnd);
 		wake_up(tsk->wait_recv);
+
 	}
 }

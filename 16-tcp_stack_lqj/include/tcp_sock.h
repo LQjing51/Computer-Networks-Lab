@@ -119,6 +119,8 @@ struct tcp_sock {
 
 	// slow start threshold
 	float ssthresh;
+
+	int flag;
 };
 
 struct retrans_packet {

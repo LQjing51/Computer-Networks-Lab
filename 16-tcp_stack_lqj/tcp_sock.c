@@ -298,6 +298,8 @@ int tcp_sock_connect(struct tcp_sock *tsk, struct sock_addr *skaddr)
 	// wait
 	int ret = sleep_on(tsk->wait_connect);
 
+	tsk->flag = 1;
+	tcp_set_timewait_timer(tsk);
 	return ret;
 
 }
@@ -385,6 +387,8 @@ int tcp_sock_read(struct tcp_sock *tsk, char *buf, int len) {
 		pthread_mutex_lock(&tsk->rcv_buf->lock);
 	}
 	int read_len = read_ring_buffer(tsk->rcv_buf, buf, len); 
+	tsk->rcv_wnd = ring_buffer_free(tsk->rcv_buf) - tsk->rcv_ofo_buf_size;
+	tcp_send_control_packet(tsk, TCP_ACK);
 	pthread_mutex_unlock(&tsk->rcv_buf->lock);
 	return read_len;
 }
