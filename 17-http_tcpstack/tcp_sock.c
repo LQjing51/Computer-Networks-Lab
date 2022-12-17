@@ -384,19 +384,19 @@ int tcp_sock_write(struct tcp_sock *tsk, char *buf, int len) {
 	int tot = 0;
 	int hdr_len = ETHER_HDR_SIZE + IP_BASE_HDR_SIZE + TCP_BASE_HDR_SIZE;
 	int max_data_len = ETH_FRAME_LEN - hdr_len;
-	printf("in tcp_sock_write, len  = %d\n",len);
+	// printf("in tcp_sock_write, len  = %d\n",len);
 	while (tot < len) {
 		while (tsk->snd_wnd <= 0) {
 			sleep_on(tsk->wait_send);
 		}
 		int slen = min(min(max_data_len, len - tot), tsk->snd_wnd);
-		printf("before, length = %d\n",hdr_len + slen);
+		// printf("before, length = %d\n",hdr_len + slen);
 		char *packet = malloc(hdr_len + slen);
 		memset(packet,0,hdr_len+slen);
 		memcpy(packet + hdr_len, buf, slen);
-		printf("after\n");
+		// printf("after\n");
 		tcp_send_packet(tsk, packet, hdr_len + slen);
-		printf("remain = %d\n", len - tot);
+		// printf("remain = %d\n", len - tot);
 		tsk->snd_wnd -= slen;
 		buf += slen;
 		tot += slen;

@@ -119,7 +119,7 @@ static inline int is_tcp_seq_valid(struct tcp_sock *tsk, struct tcp_cb *cb)
 void tcp_process(struct tcp_sock *tsk, struct tcp_cb *cb, char *packet)
 {
 	// fprintf(stdout, "TODO: implement %s please.\n", __FUNCTION__);
-	printf("receive a packet, in tcp_process, flag = %d\n", cb->flags);
+	// printf("receive a packet, in tcp_process, flag = %d\n", cb->flags);
 	if(tsk->state != TCP_LISTEN && tsk->state != TCP_SYN_RECV && tsk->state != TCP_SYN_SENT \
 	&& !is_tcp_seq_valid(tsk,cb)){
 		return;

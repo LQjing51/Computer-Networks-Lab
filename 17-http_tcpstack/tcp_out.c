@@ -31,7 +31,7 @@ static void tcp_init_hdr(struct tcphdr *tcp, u16 sport, u16 dport, u32 seq, u32 
 // the packet by calling ip_send_packet.
 void tcp_send_packet(struct tcp_sock *tsk, char *packet, int len) 
 {
-	printf("send a data packet\n");
+	// printf("send a data packet\n");
 	struct iphdr *ip = packet_to_ip_hdr(packet);
 	struct tcphdr *tcp = (struct tcphdr *)((char *)ip + IP_BASE_HDR_SIZE);
 
@@ -57,14 +57,14 @@ void tcp_send_packet(struct tcp_sock *tsk, char *packet, int len)
 
 	tsk->snd_nxt += tcp_data_len;
 
-	printf("before,len = %d\n", len);
+	// printf("before,len = %d\n", len);
 	// add packet into send buffer
 	char *buf = malloc(len);
-	printf("after0\n");
+	// printf("after0\n");
 
 	memcpy(buf, packet, len);
 
-	printf("after0\n");
+	// printf("after0\n");
 
 	struct retrans_packet *new_packet = (struct retrans_packet *) malloc(sizeof(struct retrans_packet));
 	new_packet->length = len;
@@ -72,18 +72,18 @@ void tcp_send_packet(struct tcp_sock *tsk, char *packet, int len)
 	new_packet->seq = seq;
 	new_packet->seq_end = tsk->snd_nxt;
 	
-	printf("after1\n");
+	// printf("after1\n");
 
 	pthread_mutex_lock(&timer_lock);
 	list_add_tail(&new_packet->list, &tsk->send_buf);
 	tcp_set_retrans_timer(tsk);
 	pthread_mutex_unlock(&timer_lock);
 
-	printf("after1\n");
+	// printf("after1\n");
 
 	ip_send_packet(packet, len);
 
-	printf("after1\n");
+	// printf("after1\n");
 
 }
 
